@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L6 Component: ExecutionLogger
+  所属层级: L6 RuntimeEnvironment
+  创建时间: 2026-04-23
+  用途: 详细定义执行日志记录器的存储格式、接口、持久化策略与测试规范
+-->
+<Component id="L6.ExecutionLogger" name="ExecutionLogger" version="1.0">
+
+  <!-- ==================== 1. 概述 ==================== -->
+  <Overview>
+    <Purpose>执行日志记录器负责记录所有代码和命令执行活动的审计信息，用于安全审计、故障排查和资源使用分析。</Purpose>
+    <Role>系统的审计员，对每次执行进行脱敏记录，不记录完整代码内容，仅记录代码哈希。</Role>
+    <LayerPosition>L6辅助组件，被RuntimeEnvironment在执行完成后调用</LayerPosition>
+  </Overview>
+
+  <!-- ==================== 2. 职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">执行记录：记录每次代码执行的时间、用户、结果状态和资源使用</Item>
+    <Item priority="critical">数据脱敏：不存储原始代码，仅存储代码前32字符的哈希/截断值</Item>
+    <Item priority="high">日志查询：支持按时间倒序查询最近N条日志</Item>
+    <Item priority="high">内存管理：提供日志清空接口，防止长期运行后内存无限增长</Item>
+    <Item priority="medium">持久化：将日志写入磁盘文件，防止进程重启后丢失（未来实现）</Item>
+    <Item priority="low">日志级别：支持INFO/DEBUG级别控制（当前仅实现INFO）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 日志格式 ==================== -->
+  <LogFormat>
+    <Field name="timestamp" type="float" required="true">
+      <Description>日志记录时间（Unix时间戳，秒）</Description>
+      <Example>1713871200.5</Example>
+    </Field>
+    <Field name="user_id" type="str" required="false" default="unknown">
+      <Description>执行请求的用户标识</Description>
+      <Example>user_12345</Example>
+    </Field>
+    <Field name="code_hash" type="str" required="true">
+      <Description>代码脱敏标识。当前实现为代码前32字符的截断值</Description>
+      <Example>print('hello world')\ndef calc(...</Example>
+      <Note>未来应改用SHA256哈希，进一步保护代码隐私</Note>
+    </Field>
+    <Field name="resource_usage" type="dict" required="true">
+      <Description>资源使用统计</Description>
+      <SubFields>
+        <Field name="memory_peak_mb" type="float">内存峰值（MB）</Field>
+        <Field name="cpu_time_ms" type="float">CPU时间（毫秒）</Field>
+      </SubFields>
+    </Field>
+    <Field name="status" type="str" required="true">
+      <Description>执行结果状态</Description>
+      <ValidValues>success, error</ValidValues>
+    </Field>
+  </LogFormat>
+
+  <!-- ==================== 4. 接口规范 ==================== -->
+  <Interface>
+    <Method name="__init__">
+      <Signature>
+        <Input>
+          <Parameter name="log_level" type="str" required="false" default="INFO">
+            <Description>日志级别</Description>
+            <ValidValues>INFO, DEBUG</ValidValues>
+          </Parameter>
+        </Input>
+        <Output type="ExecutionLogger">ExecutionLogger实例</Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 设置self.log_level</Step>
+        <Step>2. 初始化空列表self.logs</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="log">
+      <Signature>
+        <Input>
+          <Parameter name="code_hash" type="str" required="true">
+            <Description>代码哈希/截断值（脱敏）</Description>
+          </Parameter>
+          <Parameter name="resource_usage" type="Dict" required="true">
+            <Description>资源使用统计字典</Description>
+          </Parameter>
+          <Parameter name="status" type="str" required="true">
+            <Description>执行结果状态</Description>
+            <ValidValues>success, error</ValidValues>
+          </Parameter>
+          <Parameter name="user_id" type="str" required="false" default="unknown">
+            <Description>用户标识</Description>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>
+        <Step>1. 获取当前时间戳（time.time()）</Step>
+        <Step>2. 组装日志字典</Step>
+        <Step>3. 追加到self.logs列表末尾</Step>
+      </Behavior>
+      <SideEffects>修改self.logs列表，增加一条记录</SideEffects>
+      <ThreadSafety>非线程安全。多线程环境下需外部锁保护</ThreadSafety>
+    </Method>
+
+    <Method name="get_logs">
+      <Signature>
+        <Input>
+          <Parameter name="limit" type="int" required="false" default="100">
+            <Description>最大返回条数</Description>
+            <Constraints>limit &gt;= 1</Constraints>
+          </Parameter>
+        </Input>
+        <Output type="List[Dict]">
+          <Description>最近limit条日志记录，按时间倒序（最新的在前）</Description>
+        </Output>
+      </Signature>
+      <Behavior>返回self.logs[-limit:]，即列表最后limit条元素</Behavior>
+      <Note>返回的是原始日志字典的引用（非深拷贝），调用方不应修改返回值</Note>
+    </Method>
+
+    <Method name="clear">
+      <Signature>
+        <Input>无</Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>调用self.logs.clear()清空所有内存中的日志</Behavior>
+      <Warning>此操作不可恢复，仅应在测试或内存告急时调用</Warning>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 持久化策略（未来扩展） ==================== -->
+  <Persistence>
+    <CurrentStatus>仅内存存储（self.logs列表）。进程退出后所有日志丢失。</CurrentStatus>
+    <FuturePlan>
+      <Option name="file_appender">
+        <Description>将每条日志以JSON Lines格式追加到日志文件</Description>
+        <Path>src/l6/logs/execution.log</Path>
+        <Rotation>按日期或大小轮转（如每天一个文件，或超过10MB轮转）</Rotation>
+        <Format>每行一个JSON对象</Format>
+      </Option>
+      <Option name="structured_logging">
+        <Description>接入Python logging模块，使用RotatingFileHandler</Description>
+        <Benefits>自动支持级别过滤、格式化、轮转</Benefits>
+      </Option>
+    </FuturePlan>
+  </Persistence>
+
+  <!-- ==================== 6. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">RuntimeEnvironment.run_code() 执行完成</Step>
+    <Step order="2">RuntimeEnvironment 调用 execution_logger.log()</Step>
+    <Step order="3">参数：code_hash=code[:32], resource_usage=result.resource_usage, status="success"/"error"</Step>
+    <Step order="4">ExecutionLogger 组装日志字典并追加到self.logs</Step>
+    <Step order="5">系统管理员或调试工具调用 get_logs(limit=N) 查看最近记录</Step>
+  </DataFlow>
+
+  <!-- ==================== 7. 配置项 ==================== -->
+  <Configuration>
+    <ConfigItem name="log_level">
+      <Description>日志级别</Description>
+      <Default>INFO</Default>
+      <ValidValues>INFO, DEBUG</ValidValues>
+      <Note>DEBUG级别未来可用于记录更详细的执行上下文</Note>
+    </ConfigItem>
+    <ConfigItem name="max_in_memory_logs">
+      <Description>内存中保留的最大日志条数（未来实现）</Description>
+      <Default>10000</Default>
+      <Note>超过此数量时，旧日志应被持久化到磁盘或丢弃</Note>
+    </ConfigItem>
+  </Configuration>
+
+  <!-- ==================== 8. 异常与错误处理 ==================== -->
+  <ErrorHandling>
+    <Scenario name="memory_overflow">
+      <Trigger>长期运行且未清理，self.logs持续增长</Trigger>
+      <Mitigation>定期调用clear()；未来实现持久化后，内存中只保留最近N条</Mitigation>
+    </Scenario>
+    <Scenario name="invalid_status">
+      <Trigger>传入status不在(success, error)中</Trigger>
+      <CurrentBehavior>当前代码不做校验，直接存入。未来应增加校验</CurrentBehavior>
+    </Scenario>
+  </ErrorHandling>
+
+  <!-- ==================== 9. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component>RuntimeEnvironment</Component>
+      <Relation>RuntimeEnvironment在run_code()的成功和异常路径中都可能调用log()</Relation>
+    </Upstream>
+    <Downstream>
+      <Component>无</Component>
+      <Description>纯数据存储组件，不依赖其他业务组件</Description>
+    </Downstream>
+    <Dependencies>
+      <External>time (Python标准库)</External>
+    </Dependencies>
+  </Coupling>
+
+  <!-- ==================== 10. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="EL_001">
+      <Name>记录单条日志</Name>
+      <Steps>
+        <Step>logger = ExecutionLogger()</Step>
+        <Step>logger.log(code_hash="abc", resource_usage={"memory_peak_mb": 10.0}, status="success")</Step>
+        <Step>logs = logger.get_logs(limit=1)</Step>
+      </Steps>
+      <Expected>logs长度为1，包含timestamp、code_hash="abc"、status="success"</Expected>
+    </TestCase>
+    <TestCase id="EL_002">
+      <Name>获取多条日志</Name>
+      <Steps>
+        <Step>logger.log(code_hash="a", resource_usage={}, status="success")</Step>
+        <Step>logger.log(code_hash="b", resource_usage={}, status="error")</Step>
+        <Step>logger.log(code_hash="c", resource_usage={}, status="success")</Step>
+        <Step>logs = logger.get_logs(limit=2)</Step>
+      </Steps>
+      <Expected>logs长度为2，最后两条为b和c（按追加顺序）</Expected>
+    </TestCase>
+    <TestCase id="EL_003">
+      <Name>清空日志</Name>
+      <Steps>
+        <Step>logger.log(code_hash="x", resource_usage={}, status="success")</Step>
+        <Step>logger.clear()</Step>
+        <Step>logs = logger.get_logs()</Step>
+      </Steps>
+      <Expected>logs为空列表</Expected>
+    </TestCase>
+    <TestCase id="EL_004">
+      <Name>默认user_id</Name>
+      <Steps>
+        <Step>logger.log(code_hash="x", resource_usage={}, status="success")</Step>
+        <Step>logs = logger.get_logs(1)</Step>
+      </Steps>
+      <Expected>logs[0]["user_id"] == "unknown"</Expected>
+    </TestCase>
+    <TestCase id="EL_005">
+      <Name>自定义user_id</Name>
+      <Steps>
+        <Step>logger.log(code_hash="x", resource_usage={}, status="success", user_id="user_42")</Step>
+        <Step>logs = logger.get_logs(1)</Step>
+      </Steps>
+      <Expected>logs[0]["user_id"] == "user_42"</Expected>
+    </TestCase>
+  </Testing>
+
+</Component>

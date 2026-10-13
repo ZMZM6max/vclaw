@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-11",
+  "test_name": "跨轮次上下文指代",
+  "category": "记忆功能",
+  "priority": "P1",
+  "user_input": "把它发给我的飞书文件助手",
+  "precondition": "文件夹中存在\"活动方案.pptx\"。飞书已绑定",
+  "react_flow": "Thought(3): \"它\"指代历史记录中的PPT -> Action: File_Read 获取PPT -> Feishu_Send 发送",
+  "expected_result": "系统: 结合对话历史提取参数。结果: 回复'已经把PPT发到您的飞书上了，请查收。'",
+  "risk_level": "中 - 上下文截断导致遗忘，要求用户重新输入",
+  "test_type": "功能",
+  "tags": [
+    "可自动化"
+  ],
+  "payload": {
+    "channel": "multi_turn",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把它发给我的飞书文件助手"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:19:16.436642"
+}

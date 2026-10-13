@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-12",
+  "test_name": "长期偏好记忆",
+  "category": "记忆功能",
+  "priority": "P2",
+  "user_input": "把今天聊的保存一下",
+  "precondition": "(1) 偏好已被写入用户画像数据库。(2) 触发保存指令",
+  "react_flow": "Thought(2): 查阅User Profile发现PDF偏好 -> Action: 调用格式转换，生成PDF文件保存",
+  "expected_result": "系统: 读取记忆库，不需用户再次指定格式。结果: 直接生成PDF文件，并回复'好的，已经按您的习惯存为PDF格式了。'",
+  "risk_level": "低 - 偏好记忆丢失",
+  "test_type": "功能",
+  "tags": [
+    "手工"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把今天聊的保存一下"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:19:22.000392"
+}

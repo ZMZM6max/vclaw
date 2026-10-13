@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Component: ReActEngine
+  Layer: L3 (Orchestration)
+  创建时间: 2026-04-27
+  用途: 定义L3 ReAct循环引擎的详细规范
+  状态: 现有代码较完整，需补全MandatoryPreActionRules
+-->
+<Component name="ReActEngine" layer="L3" version="1.0">
+
+  <Description>
+    ReAct (Reasoning + Acting) 循环引擎，实现 Thought → Action → Observation 闭环。
+    通过LLM生成Thought，决定下一步行动（调用工具或直接回复）。
+    支持多轮迭代，直到得到最终答案或达到最大迭代次数。
+  </Description>
+
+  <Responsibilities>
+    <Item priority="critical">基于当前状态生成 Thought，分析下一步行动</Item>
+    <Item priority="critical">在Observation返回后，基于结果再生成新Thought</Item>
+    <Item priority="high">维护思考历史记录（thought_history）</Item>
+    <Item priority="high">支持工具调用决策（AgentAction生成）</Item>
+    <Item priority="medium">支持函数调用模式（LLM原生tool_calls）和文本解析模式</Item>
+    <Item priority="medium">遵循MandatoryPreActionRules（文件查询必须先检索再回复）</Item>
+  </Responsibilities>
+
+  <Workflow>
+    <Step name="Thought">分析当前状态，决定下一步行动</Step>
+    <Step name="Action">执行决策（调用工具或直接回复）</Step>
+    <Step name="Observation">观察执行结果，更新状态</Step>
+    <LoopCondition>达到终止条件（得到答案或达到最大轮数）</LoopCondition>
+  </Workflow>
+
+  <MaxIterations>5</MaxIterations>
+
+  <TerminationConditions>
+    <Condition>得到最终答案（action_type = "final_answer"）</Condition>
+    <Condition>达到最大迭代次数（max_iterations = 5）</Condition>
+    <Condition>用户请求直接回复（无需工具）</Condition>
+  </TerminationConditions>
+
+  <ToolSelectionRules>
+    <Rule priority="critical">禁止在未调用任何检索/计算工具前直接降级为追问——必须先尝试至少一次工具调用</Rule>
+    <Rule>ToolRegistry匹配阈值：当用户请求明确涉及文件、计算、搜索时，必须生成AgentAction而非直接回复</Rule>
+    <Rule>最小尝试次数：至少1次工具调用后才能放弃工具路径</Rule>
+    <Rule>文件检索场景（用户要求查找/搜索/定位文件）：必须调用file_read或search_web工具，禁止直接回复"找不到"</Rule>
+  </ToolSelectionRules>
+
+  <MandatoryPreActionRules>
+    <Rule priority="critical" intent="file_query">
+      当用户意图为文件查询（查找/搜索/定位文件）时，ReActEngine必须先执行以下步骤：
+      Step 1: 调用MemoryAccessor从L4检索相关历史/索引信息；
+      Step 2: 调用ToolCaller执行find/index工具搜索目标文件；
+      仅当上述两步均返回空结果后，才允许返回"未找到"类回复。禁止在步骤1或步骤2执行前直接返回not_found。
+    </Rule>
+    <Note>此规则防止ReActEngine在未尝试检索的情况下直接降级为追问用户，确保文件查询类请求充分使用L4记忆检索和L5工具搜索能力</Note>
+  </MandatoryPreActionRules>
+
+  <ReactPromptTemplate>
+    <![CDATA[
+You are an AI assistant that follows the ReAct (Reasoning + Acting) pattern.
+
+Your task is to analyze the user's request and decide the next step.{thought_history_desc}
+
+User request: {query}{knowledge_desc}{observation_desc}{plan_desc}{tools_desc}
+
+Follow this format in your response:
+
+Thought: [Your step-by-step reasoning about what to do next]
+
+Action: [If you need to use a tool, write the tool name. If you have the final answer, write "Final Answer"]
+
+Action Input: [If using a tool, provide the input parameters as JSON. If final answer, provide the answer text]
+
+Rules:
+1. Break down complex problems into steps
+2. Use tools when they can help (calculator, search, file operations, etc.)
+3. If previous tool result is available, analyze it before deciding next step
+4. When you have enough information to answer, use "Final Answer" as the action
+5. For file operations, use natural language paths (e.g., "桌面/文件.txt", "文档/报告.md")
+6. For file queries, ALWAYS try to search first before saying "not found"
+
+Respond with Thought, Action, and Action Input:
+    ]]>
+  </ReactPromptTemplate>
+
+  <Methods>
+    <Method name="generate_thought">
+      <Signature>
+        <Input>
+          <Parameter name="query" type="str" required="true">用户查询</Parameter>
+          <Parameter name="observation" type="Observation" required="false">之前的工具执行结果</Parameter>
+          <Parameter name="available_tools" type="List[Dict]" required="false">可用工具定义</Parameter>
+          <Parameter name="knowledge" type="List[str]" required="false">相关知识片段</Parameter>
+          <Parameter name="history" type="List[Dict]" required="false">对话历史</Parameter>
+          <Parameter name="plan_steps" type="List[Dict]" required="false">TaskPlanner生成的步骤参考</Parameter>
+        </Input>
+        <Output type="Dict">
+          <Field name="thought" type="str">分析思考过程</Field>
+          <Field name="action_type" type="str">"tool" 或 "final_answer"</Field>
+          <Field name="action" type="str">工具名称或回答内容</Field>
+          <Field name="action_input" type="dict">工具参数或回答文本</Field>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 构建ReAct提示词（包含query、observation、knowledge、history、plan_steps、tools）</Step>
+        <Step>2. 调用LLMManager.complete(messages, tools=available_tools, temperature=0.3)</Step>
+        <Step>3. 若返回AgentAction（LLM原生tool_calls），直接解析</Step>
+        <Step>4. 若返回文本，使用_parse_react_response()解析Thought/Action/Action Input</Step>
+        <Step>5. 返回结构化的Dict</Step>
+      </Implementation>
+    </Method>
+
+    <Method name="_parse_react_response">
+      <Signature>
+        <Input>
+          <Parameter name="response" type="str" required="true">LLM文本响应</Parameter>
+        </Input>
+        <Output type="Dict">
+          <Field name="thought" type="str">提取的思考过程</Field>
+          <Field name="action_type" type="str">"tool" 或 "final_answer"</Field>
+          <Field name="action" type="str">工具名或最终答案</Field>
+          <Field name="action_input" type="dict">解析后的参数</Field>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 正则提取 Thought: 后的内容</Step>
+        <Step>2. 正则提取 Action: 后的内容</Step>
+        <Step>3. 正则提取 Action Input: 后的内容，尝试JSON解析</Step>
+        <Step>4. 若Action为"Final Answer"，action_type设为"final_answer"，否则为"tool"</Step>
+      </Implementation>
+    </Method>
+
+    <Method name="add_to_history">
+      <Signature>
+        <Input>
+          <Parameter name="thought" type="str" required="true">思考内容</Parameter>
+          <Parameter name="action" type="str" required="true">行动内容</Parameter>
+          <Parameter name="observation" type="str" required="false">观察结果</Parameter>
+        </Input>
+      </Signature>
+      <Description>记录思考历史到thought_history</Description>
+    </Method>
+
+    <Method name="reset">
+      <Signature></Signature>
+      <Description>重置ReAct引擎状态，清空thought_history</Description>
+    </Method>
+  </Methods>
+
+  <HistoryManagement>
+    <MaxHistoryEntries>最近3条thought用于提示词，但内部保留全部历史</MaxHistoryEntries>
+    <HistoryFormat>
+      <Entry>
+        <Field name="thought">思考内容</Field>
+        <Field name="action">行动内容</Field>
+        <Field name="observation">观察结果（如有）</Field>
+        <Field name="timestamp">时间戳</Field>
+      </Entry>
+    </HistoryFormat>
+  </HistoryManagement>
+
+  <Integration>
+    <Upstream>
+      <From>L3.Orchestration._run_react_loop()</From>
+      <Data>query、observation、available_tools、knowledge、history、plan_steps</Data>
+    </Upstream>
+    <Downstream>
+      <To>L3.LLMManager.complete()</To>
+      <Data>messages、tools</Data>
+    </Downstream>
+  </Integration>
+
+  <Testing>
+    <Requirement>ReAct循环测试必须使用真实LLM验证思考质量</Requirement>
+    <TestCases>
+      <Case id="TC-RE-001">generate_thought() 返回tool类型（需要调用工具）</Case>
+      <Case id="TC-RE-002">generate_thought() 返回final_answer类型（直接回答）</Case>
+      <Case id="TC-RE-003">Observation存在时基于结果再思考</Case>
+      <Case id="TC-RE-004">_parse_react_response() 正确解析格式</Case>
+      <Case id="TC-RE-005">thought_history 正确累积</Case>
+      <Case id="TC-RE-006">文件查询场景必须先尝试工具调用（MandatoryPreActionRules）</Case>
+    </TestCases>
+  </Testing>
+
+  <ImplementationNotes>
+    <Note>现有代码位于 src/l3/l3_orchestration.py ReActEngine 类</Note>
+    <Note>当前状态：generate_thought()、_parse_react_response()、add_to_history()、reset() 均已实现</Note>
+    <Note>当前状态：支持函数调用模式和文本解析模式</Note>
+    <Note>需强化：在generate_thought()中显式检查MandatoryPreActionRules（文件查询场景）</Note>
+    <Note>当前状态：history保留最近10条消息用于LLM上下文</Note>
+  </ImplementationNotes>
+
+</Component>

@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L1 Component: SessionManager (L1层)
+  拆分自: L1_UserInteraction.xml
+  用途: 用户会话标识管理器（L1层），仅维护 user_id 到 session_id 的映射关系
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L1_UserInteraction.xml
+  src/l1/docs/L1_UserInteraction.xml
+-->
+<Component id="L1.SessionManager" name="SessionManager" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>用户会话标识管理器（L1层），仅维护 user_id 到 session_id 的映射关系。会话生命周期管理由 L2.SessionManager 负责</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">维护 user_id -&gt; session_id 的单映射关系（内存中的轻量级映射表）</Item>
+      <Item priority="critical">识别新建会话命令（/new, /reset, /start, 新会话）</Item>
+      <Item priority="high">在 StandardEvent.metadata 中注入 session_id</Item>
+      <Item priority="medium">支持可选的 L4 持久化（双写双删策略），实现跨重启会话恢复</Item>
+      <Item priority="high">禁止处理会话 TTL、历史记录、状态存储——此类职责属于 L2.SessionManager</Item>
+    </Responsibilities>
+
+    <Boundary>
+      <L1Scope>user_id → session_id 映射注入与透传</L1Scope>
+      <L2Scope>session_id → SessionContext 生命周期管理（创建、获取、更新、过期）</L2Scope>
+      <Note>L1.SessionManager 与 L2.SessionManager 是不同组件：L1管"谁是谁"，L2管"会话里有什么"</Note>
+    </Boundary>
+
+    <DataStructure>
+      <Field name="_user_session_map" type="Dict[str, str]">
+        <Description>内存中的用户会话映射（热缓存）</Description>
+        <Example>{"user_123": "session-abc-456"}</Example>
+      </Field>
+      <Field name="_response_context_map" type="Dict[str, Dict]">
+        <Description>user_id 到最近请求渠道上下文的映射，用于 send_response 路由</Description>
+        <Note>并发请求下存在覆盖风险，长期方案需引入 request_id 全链路追踪</Note>
+      </Field>
+      <Field name="PREFERENCE_KEY_ACTIVE_SESSION" type="str" value="active_session_id">
+        <Description>存储到 L4 持久化时的 preference key</Description>
+      </Field>
+    </DataStructure>
+
+    <NewSessionCommands>
+      <Command>/new</Command>
+      <Command>/reset</Command>
+      <Command>/start</Command>
+      <Command>新会话</Command>
+    </NewSessionCommands>
+
+    <Behavior>
+      <Case name="first_request">
+        <Condition>用户首次请求（无映射，且非新建会话命令）</Condition>
+        <Action>session_id = None，让 L2 创建新会话</Action>
+        <Note>L1 不生成 session_id，仅透传 None</Note>
+      </Case>
+      <Case name="subsequent_request">
+        <Condition>用户后续请求（有映射）</Condition>
+        <Action>返回已有的 session_id</Action>
+        <Note>先查内存，miss 后查 L4 并回填内存缓存</Note>
+      </Case>
+      <Case name="new_session_command">
+        <Condition>用户发送 /new 等命令</Condition>
+        <Action>清除旧映射（内存 del + L4 save None），session_id = None</Action>
+        <Note>旧会话丢失（Phase 1 设计，后续支持恢复）</Note>
+      </Case>
+    </Behavior>
+
+    <IntegrationWithL2>
+      <Step>1. L1 在 StandardEvent.metadata 中放入 session_id</Step>
+      <Step>2. L2 从 metadata 读取 session_id</Step>
+      <Step>3. L2 返回 SessionContext（包含 session_id）</Step>
+      <Step>4. L1 调用 update_session_mapping() 保存映射</Step>
+    </IntegrationWithL2>
+
+    <DataFlow>
+      <Step order="1">receive_payload 接收原始数据并完成 normalize + validate</Step>
+      <Step order="2">_get_session_id(user_id, content) 检查是否为新建会话命令</Step>
+      <Step order="3" condition="新建会话命令">清除内存与 L4 中的旧映射，返回 (None, True)</Step>
+      <Step order="4" condition="非新建命令">查内存 _user_session_map，命中则返回</Step>
+      <Step order="5" condition="内存 miss 且 L4 可用">调用 load_user_preference 查 L4，命中则回填内存</Step>
+      <Step order="6" condition="均无映射">返回 (None, False)，让 L2 创建新会话</Step>
+      <Step order="7">将 session_id 与 is_new_session_request 注入 event.metadata</Step>
+      <Step order="8">L2 处理完成后，调用 update_session_mapping(user_id, session_id) 更新映射</Step>
+      <Step order="9" condition="L4 可用">同时持久化到 L4（save_user_preference）</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="_get_session_id">
+      <Signature>_get_session_id(user_id: str, content: str) -&gt; tuple[Optional[str], bool]</Signature>
+      <Description>获取用户当前的 session_id，同时处理新建会话命令。内部方法，由 receive_payload 调用</Description>
+      <Input>
+        <Parameter name="user_id" type="str" required="true">
+          <Description>用户唯一标识</Description>
+        </Parameter>
+        <Parameter name="content" type="str" required="true">
+          <Description>消息内容，用于检测新建会话命令</Description>
+        </Parameter>
+      </Input>
+      <Output type="tuple[Optional[str], bool]">
+        <Field name="session_id" type="Optional[str]">
+          <Description>已有 session_id，或 None（表示需创建新会话）</Description>
+        </Field>
+        <Field name="is_new_session_request" type="bool">
+          <Description>用户是否显式请求了新会话</Description>
+        </Field>
+      </Output>
+    </PrimaryMethod>
+
+    <SecondaryMethod name="update_session_mapping">
+      <Signature>update_session_mapping(user_id: str, session_id: str) -&gt; None</Signature>
+      <Description>更新 user_id 到 session_id 的映射。双写策略：内存缓存 + L4 持久化（若可用）</Description>
+      <Input>
+        <Parameter name="user_id" type="str" required="true">
+          <Description>用户唯一标识</Description>
+        </Parameter>
+        <Parameter name="session_id" type="str" required="true">
+          <Description>L2 返回的会话 ID</Description>
+        </Parameter>
+      </Input>
+    </SecondaryMethod>
+
+    <SecondaryMethod name="get_user_session">
+      <Signature>get_user_session(user_id: str) -&gt; Optional[str]</Signature>
+      <Description>查询用户当前的 session_id。先查内存，miss 后查 L4 并回填缓存</Description>
+      <Input>
+        <Parameter name="user_id" type="str" required="true">
+          <Description>用户唯一标识</Description>
+        </Parameter>
+      </Input>
+      <Output type="Optional[str]">
+        <Description>session_id 或 None</Description>
+      </Output>
+    </SecondaryMethod>
+
+    <SecondaryMethod name="send_response">
+      <Signature>send_response(user_id: str, content: str, channel: str = None, metadata: Optional[Dict] = None) -&gt; Any</Signature>
+      <Description>将 L2/L3 的响应文本格式化为渠道特定的输出结构</Description>
+      <Input>
+        <Parameter name="user_id" type="str" required="true">
+          <Description>用户唯一标识</Description>
+        </Parameter>
+        <Parameter name="content" type="str" required="true">
+          <Description>响应文本内容</Description>
+        </Parameter>
+        <Parameter name="channel" type="str" required="false">
+          <Description>可选的渠道覆盖。None 时从 _response_context_map 自动检测</Description>
+        </Parameter>
+        <Parameter name="metadata" type="dict" required="false">
+          <Description>可选的元数据覆盖（如 chat_id, connection_id）</Description>
+        </Parameter>
+      </Input>
+      <Output type="Any">
+        <ChannelFormat channel="telegram">dict（chat_id, text, parse_mode）</ChannelFormat>
+        <ChannelFormat channel="websocket">dict（type, message, connection_id, timestamp）</ChannelFormat>
+        <ChannelFormat channel="webhook">tuple[int, dict]（status_code, response_body）</ChannelFormat>
+      </Output>
+      <Exceptions>
+        <Exception name="UnsupportedChannelError">
+          <Description>无法识别渠道且未提供有效的 channel 参数</Description>
+          <ErrorCode>400</ErrorCode>
+        </Exception>
+      </Exceptions>
+      <Note>并发场景下建议显式传入 channel 与 metadata，避免 _response_context_map 被覆盖</Note>
+    </SecondaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L1.UserInteraction">L1 主入口</Component>
+      <Relation>receive_payload 调用 _get_session_id，L2 返回后调用 update_session_mapping</Relation>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="L2">控制网关层</Layer>
+      <Relation>透传 session_id 给 L2；接收 L2 返回的 SessionContext 并提取 session_id</Relation>
+      <DataFormat>StandardEvent.metadata 中的 session_id 字段；SessionContext 对象</DataFormat>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>core.models.StandardEvent - 用于注入 session_id 到 metadata</Dependency>
+        <Dependency>core.interfaces.MemoryInterface - 可选的 L4 持久化接口</Dependency>
+        <Dependency>core.exceptions.UnsupportedChannelError - send_response 中抛出</Dependency>
+      </Internal>
+    </Dependencies>
+
+    <CouplingStrength>中耦合</CouplingStrength>
+    <CouplingType>数据耦合（通过 StandardEvent.metadata 传递 session_id）+ 标记耦合（is_new_session_request）</CouplingType>
+
+    <Note>
+      L1.SessionManager 不直接依赖 L2.SessionManager 的具体实现，仅通过 StandardEvent 和 SessionContext 进行数据交换。
+      引入 L4 持久化时，通过 MemoryInterface 抽象接口访问，保持低耦合。
+    </Note>
+  </Coupling>
+
+</Component>

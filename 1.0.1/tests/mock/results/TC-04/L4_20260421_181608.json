@@ -1,0 +1,76 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:16:04.505777",
+  "execution_time": 4.39189338684082,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "77275be9-5beb-4f49-8135-02a2487fdea7",
+    "query": "把那个文件删了",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "results": [],
+    "query_embedding": [],
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收检索请求: operation=retrieve_and_search, query='把那个文件删了'",
+      "[2] CacheManager检查: 未命中（无可复用的历史检索缓存）",
+      "[3] EmbeddingService: 生成1536维向量失败前置条件未满足（当前输入为retrieve_and_search复合操作且未提供可检索索引数据）",
+      "[4] VectorStore: 未执行相似度检索（输入中history_count=0, search_count=0, real_search_results为空）",
+      "[5] 返回: 未检索到可用结果",
+      "[6] CacheManager: 未缓存空结果集"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已检查缓存，但未命中。",
+        "output_summary": "cache_hit=false"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "当前输入为复合操作且未进入标准search检索链路，因此未执行Embedding生成。",
+        "output_summary": "未生成query_embedding"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "本次请求不是store操作，因此未进行文本分块。",
+        "output_summary": "未分块"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "未提供可检索文档向量索引或搜索结果，未执行向量相似度检索。",
+        "output_summary": "results=[]"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "本次请求不是store_conversation或retrieve_history操作，因此未触发对话历史存取。",
+        "output_summary": "未访问session_id=77275be9-5beb-4f49-8135-02a2487fdea7"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "本次请求未涉及创建、删除或更新索引操作。",
+        "output_summary": "未执行索引管理"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收检索请求: operation=retrieve_and_search, query='把那个文件删了'",
+    "[2] CacheManager检查: 未命中（无可复用的历史检索缓存）",
+    "[3] EmbeddingService: 生成1536维向量失败前置条件未满足（当前输入为retrieve_and_search复合操作且未提供可检索索引数据）",
+    "[4] VectorStore: 未执行相似度检索（输入中history_count=0, search_count=0, real_search_results为空）",
+    "[5] 返回: 未检索到可用结果",
+    "[6] CacheManager: 未缓存空结果集"
+  ],
+  "error": null
+}

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L4 Component: EmbeddingService
+  拆分自: L4_MemoryKnowledge.xml
+  用途: Embedding服务，将文本转换为向量
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L4_MemoryKnowledge.xml
+-->
+<Component id="L4.EmbeddingService" name="EmbeddingService" version="1.0">
+
+  <Description>Embedding服务，将文本转换为向量表示</Description>
+
+  <Providers>
+    <Provider name="OpenAI">
+      <Models>
+        <Model>text-embedding-ada-002</Model>
+        <Model>text-embedding-3-small</Model>
+      </Models>
+      <Configuration>
+        <Param name="api_key" required="true">OpenAI API密钥</Param>
+        <Param name="model" default="text-embedding-3-small">模型名称</Param>
+      </Configuration>
+    </Provider>
+
+    <Provider name="SentenceTransformers">
+      <Description>本地Embedding模型，无需API调用</Description>
+      <Dependencies>sentence-transformers</Dependencies>
+      <Configuration>
+        <Param name="model_name" default="all-MiniLM-L6-v2">本地模型名称</Param>
+      </Configuration>
+    </Provider>
+
+    <Provider name="Mock">
+      <Description>测试用的Mock实现，返回固定维度的随机向量</Description>
+      <Configuration>
+        <Param name="dimension" default="1536">Mock向量维度</Param>
+      </Configuration>
+    </Provider>
+  </Providers>
+
+  <Configuration>
+    <Model default="text-embedding-3-small">默认模型</Model>
+    <Dimension>1536</Dimension>
+    <BatchSize>100</BatchSize>
+  </Configuration>
+
+  <Interface>
+    <Method name="embed">
+      <Signature>embed(text: str) -&gt; List[float]</Signature>
+      <Description>将单个文本转换为向量</Description>
+      <Input>
+        <Parameter name="text" type="str" required="true">输入文本</Parameter>
+      </Input>
+      <Output type="List[float]">Embedding向量</Output>
+      <Exceptions>
+        <Exception name="EmbeddingError">Embedding生成失败（网络问题或API限制）</Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="embed_batch">
+      <Signature>embed_batch(texts: List[str]) -&gt; List[List[float]]</Signature>
+      <Description>批量将文本转换为向量</Description>
+      <Input>
+        <Parameter name="texts" type="List[str]" required="true">文本列表</Parameter>
+      </Input>
+      <Output type="List[List[float]]">Embedding向量列表</Output>
+      <Exceptions>
+        <Exception name="EmbeddingError">批量Embedding生成失败</Exception>
+      </Exceptions>
+    </Method>
+  </Interface>
+
+</Component>

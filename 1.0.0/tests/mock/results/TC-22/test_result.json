@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-22",
+  "test_name": "文件操作中途文件被占用",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是提示视频正在被占用并要求先关闭后再试，而实际回复是在要求确认移动操作并询问路径信息，核心语义不一致。",
+  "final_response": "确定要移动这个1G的视频文件吗？这属于高危可恢复操作，可能会影响文件位置与原有访问路径。请先确认：\n1. 源文件完整路径\n2. 目标位置（桌面）\n3. 是否继续执行（确认/取消）",
+  "execution_time": 27.524407863616943,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-22",
+  "timestamp": "2026-04-21T18:23:58.555064"
+}

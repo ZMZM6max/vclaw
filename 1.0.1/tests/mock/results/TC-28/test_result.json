@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-28",
+  "test_name": "特殊字符文件名处理",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "实际回复只是询问并提示文件名含特殊字符、等待确认，没有给出文件名处理结果，也没有体现已过滤或已捕获创建异常。",
+  "final_response": "确定要创建文件《我的日记?.txt》吗？该文件名包含特殊字符，可能会被系统自动处理或重命名，请确认后我再继续。",
+  "execution_time": 27.417851209640503,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-28",
+  "timestamp": "2026-04-21T18:27:21.505643"
+}

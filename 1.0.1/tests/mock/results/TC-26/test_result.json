@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-26",
+  "test_name": "长耗时任务的进度反馈",
+  "status": "failed",
+  "e2e_status": "failed",
+  "semantic_match": true,
+  "semantic_reason": "",
+  "final_response": null,
+  "execution_time": 39.90642476081848,
+  "layer_count": 5,
+  "error_message": "L5错误: 参数与用户原始输入不一致，请确认：当前动作是 python_repl，但 action_input.code 内容与用户描述的文件合并任务不匹配，且未提供可执行的合并所需文件路径或具体代码。",
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-26",
+  "timestamp": "2026-04-21T18:26:26.063416"
+}

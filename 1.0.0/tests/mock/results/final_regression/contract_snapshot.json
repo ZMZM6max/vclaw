@@ -1,0 +1,902 @@
+{
+  "generated_at": "2026-04-20T19:47:47.105152",
+  "xml_contracts": {
+    "L1_UserInteraction": {
+      "file": "docs\\03_specs\\L1_UserInteraction.xml",
+      "components": [
+        {
+          "name": "ProtocolAdapter",
+          "description": "协议适配器基类，定义统一适配接口",
+          "methods": []
+        },
+        {
+          "name": "DataValidator",
+          "description": "数据验证器，确保输入数据符合预期格式",
+          "methods": []
+        },
+        {
+          "name": "EventNormalizer",
+          "description": "事件标准化器，将各种格式的原始数据转为StandardEvent",
+          "methods": []
+        },
+        {
+          "name": "ErrorHandler",
+          "description": "错误处理器，管理 L1 层传输/协议级异常和重试逻辑，同时接收L3.ErrorTranslator经L2回流的业务错误进行规范化输出",
+          "methods": []
+        },
+        {
+          "name": "SessionManager",
+          "description": "用户会话标识管理器（L1层），仅维护 user_id 到 session_id 的映射关系。会话生命周期管理由L2.SessionManager负责",
+          "methods": []
+        }
+      ],
+      "interfaces": [],
+      "dataflows": [
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收原始数据（raw_data: dict）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "根据channel类型选择对应的ProtocolAdapter"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "使用DataValidator验证数据完整性"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "EventNormalizer将数据转换为StandardEvent"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "L1.SessionManager检查并注入session_id到metadata（仅做映射，不管理生命周期）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "返回StandardEvent给上层（L2）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收L2返回的SessionContext，L1.SessionManager更新session映射"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "L1.ErrorHandler记录并重试（连接失败、解析错误等）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "L3.ErrorTranslator → L2 → L1.ErrorHandler 格式化输出业务错误给用户"
+        }
+      ]
+    },
+    "L2_ControlGateway": {
+      "file": "docs\\03_specs\\L2_ControlGateway.xml",
+      "components": [
+        {
+          "name": "SessionManager",
+          "description": "会话生命周期管理器（L2层），负责 session_id 的创建、获取、更新和过期管理。user_id → session_id 的映射由L1.SessionManager维护",
+          "methods": [
+            "create_session(user_id: str) -> SessionContext",
+            "get_session(session_id: str) -> Optional[SessionContext]",
+            "update_session(session_id: str, context: SessionContext) -> bool",
+            "expire_session(session_id: str) -> bool"
+          ]
+        },
+        {
+          "name": "RateLimiter",
+          "description": "限流器，防止请求过载",
+          "methods": []
+        },
+        {
+          "name": "ContextAssembler",
+          "description": "上下文组装器，将StandardEvent转换为SessionContext",
+          "methods": []
+        },
+        {
+          "name": "HistoryRetriever",
+          "description": "历史记录检索器，从L4获取用户历史对话",
+          "methods": []
+        },
+        {
+          "name": "ToolPreparer",
+          "description": "工具权限筛选器，根据用户权限过滤可用工具列表",
+          "methods": [
+            "prepare_tools(tools: List[Tool], user_permissions: dict) -> List[Tool]"
+          ]
+        }
+      ],
+      "interfaces": [],
+      "dataflows": [
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收StandardEvent（来自L1，含metadata.session_id）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "RateLimiter检查是否超过请求限制"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "L2.SessionManager获取或创建会话（使用metadata中的session_id）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "HistoryRetriever从L4检索历史记录"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ToolPreparer根据用户权限筛选可用工具"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ContextAssembler组装SessionContext（含filtered_tools）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "调用L3.run(context)处理请求"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收L3返回的响应文本（或AgentAction）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "调用L5.execute(action)执行工具，接收Observation后再次调用L3.run(context, observation)"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "将L3.ErrorTranslator转译后的错误文本经L2回流至L1.ErrorHandler"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "调用send_response发送响应给L1"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "更新会话状态到L4"
+        }
+      ]
+    },
+    "L3_Orchestration": {
+      "file": "docs\\03_specs\\L3_Orchestration.xml",
+      "components": [
+        {
+          "name": "SecurityGuard",
+          "description": "安全判断组件，对用户请求进行安全分类（正常/敏感/恶意/高危）。作为L3入口强制守卫，必须在ReActEngine/TaskPlanner之前执行",
+          "methods": [
+            "classify(request: str) -> SecurityClassification"
+          ]
+        },
+        {
+          "name": "ReActEngine",
+          "description": "ReAct循环引擎，实现Thought-Action-Observation循环",
+          "methods": []
+        },
+        {
+          "name": "TaskPlanner",
+          "description": "任务规划器，将复杂请求拆解为子任务",
+          "methods": [
+            "plan(intent: Intent, context: SessionContext) -> TaskGraph"
+          ]
+        },
+        {
+          "name": "LLMManager",
+          "description": "LLM调用管理器，封装大模型交互",
+          "methods": [
+            "complete(messages: List, tools: List) -> LLMResponse",
+            "stream(messages: List) -> Iterator[str]"
+          ]
+        },
+        {
+          "name": "ToolCaller",
+          "description": "工具调用器，与L5交互执行工具，负责按顺序调用L5内部组件完成工具执行",
+          "methods": [
+            "call_tool(action: AgentAction) -> Observation",
+            "format_tools_for_llm() -> List[dict]"
+          ]
+        },
+        {
+          "name": "MemoryAccessor",
+          "description": "记忆访问器，从L4检索相关知识",
+          "methods": [
+            "retrieve_relevant(query: str, top_k: int) -> List[str]",
+            "enhance_context(context: SessionContext) -> EnhancedContext"
+          ]
+        },
+        {
+          "name": "ErrorTranslator",
+          "description": "错误转译器，将L5返回的业务级技术错误转译为用户友好的中文提示，并通过L2回流至L1规范化返回",
+          "methods": [
+            "translate(observation: Observation) -> str"
+          ]
+        }
+      ],
+      "interfaces": [],
+      "dataflows": [
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收SessionContext（来自L2）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "SecurityGuard对请求进行安全判断（正常/敏感/恶意/高危）—— L3入口强制守卫，必须先于ReActEngine/TaskPlanner执行"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "直接拒绝并返回友好提示"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "标记为需二次确认，路由到ConfirmationManager"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "MemoryAccessor从L4检索相关知识"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "MemoryAccessor → TextChunker → EmbeddingService → VectorStore → IndexManager → CacheManager"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "TaskPlanner根据上下文规划任务"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ReActEngine启动循环，LLMManager生成Thought"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "决策：调用工具或直接回复"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ToolCaller调用L5（顺序：ToolRegistry → ParameterValidator → PermissionManager → ConfirmationManager → ToolExecutor → L6）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收Observation（来自L5）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ErrorTranslator转译错误信息为用户友好提示"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "错误信息经L2回流至L1.ErrorHandler规范化返回"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "回到Step 5（继续ReAct循环）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "生成最终回复"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "返回回复文本给L2"
+        }
+      ]
+    },
+    "L4_MemoryKnowledge": {
+      "file": "docs\\03_specs\\L4_MemoryKnowledge.xml",
+      "components": [
+        {
+          "name": "VectorStore",
+          "description": "向量存储抽象，定义统一的向量数据库接口",
+          "methods": [
+            "add_documents(docs: List[Document]) -> bool",
+            "search(query_embedding: List[float], top_k: int) -> List[Document]",
+            "delete(document_ids: List[str]) -> bool"
+          ]
+        },
+        {
+          "name": "EmbeddingService",
+          "description": "Embedding服务，将文本转换为向量",
+          "methods": [
+            "embed(text: str) -> List[float]",
+            "embed_batch(texts: List[str]) -> List[List[float]]"
+          ]
+        },
+        {
+          "name": "TextChunker",
+          "description": "文本分块器，将长文本切分为语义完整的片段",
+          "methods": []
+        },
+        {
+          "name": "MemoryStore",
+          "description": "记忆存储器，管理长期记忆（用户历史对话）",
+          "methods": [
+            "store_conversation(session_id: str, messages: List[dict]) -> bool",
+            "retrieve_history(session_id: str, limit: int) -> List[dict]",
+            "store_preference(user_id: str, key: str, value: any) -> bool"
+          ]
+        },
+        {
+          "name": "IndexManager",
+          "description": "索引管理器，管理向量索引的生命周期",
+          "methods": []
+        },
+        {
+          "name": "CacheManager",
+          "description": "缓存管理器，缓存热点Embedding和检索结果",
+          "methods": []
+        }
+      ],
+      "interfaces": [],
+      "dataflows": [
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收检索请求（query: str）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "CacheManager检查缓存（避免重复Embedding）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "EmbeddingService将query转为向量"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "VectorStore执行相似度检索"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "返回top_k个最相关的文档片段"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "CacheManager缓存结果"
+        }
+      ]
+    },
+    "L5_ToolsCapabilities": {
+      "file": "docs\\03_specs\\L5_ToolsCapabilities.xml",
+      "components": [
+        {
+          "name": "ToolRegistry",
+          "description": "工具注册表，管理所有可用工具",
+          "methods": [
+            "register(name: str, tool: Tool) -> None",
+            "unregister(name: str) -> None",
+            "get(name: str) -> Optional[Tool]",
+            "list_tools() -> List[Tool]"
+          ]
+        },
+        {
+          "name": "ParameterValidator",
+          "description": "参数验证器，校验LLM生成的参数",
+          "methods": [
+            "validate(params: dict, schema: dict) -> ValidationResult",
+            "sanitize(params: dict, schema: dict) -> dict"
+          ]
+        },
+        {
+          "name": "ToolExecutor",
+          "description": "工具执行器，实际调用工具实现。对代码/命令类工具委派至L6执行",
+          "methods": [
+            "execute(tool: Tool, params: dict) -> ExecutionResult"
+          ]
+        },
+        {
+          "name": "ResultFormatter",
+          "description": "结果格式化器，统一输出格式",
+          "methods": []
+        },
+        {
+          "name": "PermissionManager",
+          "description": "权限管理器，管理用户对工具的访问权限",
+          "methods": [
+            "check_permission(user_id: str, tool_name: str) -> PermissionResult",
+            "add_rule(rule: PermissionRule) -> None"
+          ]
+        },
+        {
+          "name": "ConfirmationManager",
+          "description": "二次确认管理器，对高危操作判断是否需用户确认",
+          "methods": [
+            "needs_confirmation(action: AgentAction, user_permissions: dict) -> bool",
+            "generate_confirmation_prompt(action: AgentAction) -> str"
+          ]
+        },
+        {
+          "name": "BashAnalyzer",
+          "description": "Bash命令分析器，对终端命令进行风险分类",
+          "methods": [
+            "analyze(command: str) -> ClassificationResult"
+          ]
+        }
+      ],
+      "interfaces": [],
+      "dataflows": [
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收AgentAction（来自L3）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ToolRegistry查找工具"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ParameterValidator验证参数"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "PermissionManager检查用户权限"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "BashAnalyzer分析命令风险等级（适用于terminal工具）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "路由到ConfirmationManager进行挂起确认"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ConfirmationManager判断是否需要二次确认（高危操作或PermissionManager标记需确认）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ToolExecutor执行工具（如为python/javascript/bash代码或terminal命令，委派至L6.RuntimeEnvironment）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ToolExecutor → L6.SandboxManager → L6.SecurityEnforcer + L6.ResourceLimiter → L6.CodeExecutor/L6.DockerController"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ResultFormatter格式化结果（含EmptyResultHandling规则）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "返回Observation（给L3）"
+        }
+      ]
+    },
+    "L6_RuntimeEnvironment": {
+      "file": "docs\\03_specs\\L6_RuntimeEnvironment.xml",
+      "components": [
+        {
+          "name": "SandboxManager",
+          "description": "沙盒管理器，管理隔离执行环境",
+          "methods": [
+            "create(environment_id: str, config: SandboxConfig) -> Sandbox",
+            "destroy(environment_id: str) -> bool",
+            "execute(sandbox: Sandbox, command: str, timeout: int) -> ExecutionResult"
+          ]
+        },
+        {
+          "name": "ResourceLimiter",
+          "description": "资源限制器，管理执行资源配额",
+          "methods": [
+            "cgroups - Linux资源组",
+            "setrlimit - 系统调用限制",
+            "timeout - 执行超时",
+            "ulimit - 进程限制"
+          ]
+        },
+        {
+          "name": "CodeExecutor",
+          "description": "代码执行器，实际运行代码逻辑",
+          "methods": []
+        },
+        {
+          "name": "DockerController",
+          "description": "Docker控制器，管理容器生命周期",
+          "methods": [
+            "create_container(image: str, resources: dict) -> Container",
+            "start_container(container_id: str) -> bool",
+            "stop_container(container_id: str, timeout: int) -> bool",
+            "exec_in_container(container_id: str, command: List[str]) -> ExecResult",
+            "remove_container(container_id: str) -> bool"
+          ]
+        },
+        {
+          "name": "SecurityEnforcer",
+          "description": "安全执行器，实施安全策略",
+          "methods": []
+        },
+        {
+          "name": "ExecutionLogger",
+          "description": "执行日志记录器，记录所有执行活动",
+          "methods": []
+        }
+      ],
+      "interfaces": [],
+      "dataflows": [
+        {
+          "from": "",
+          "to": "",
+          "step_text": "接收执行请求（language, code, timeout）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "验证语言和代码（基本安全检查）"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "SandboxManager创建隔离环境"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ResourceLimiter设置资源限制"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "CodeExecutor在沙盒内执行代码"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "SecurityEnforcer监控执行过程"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "捕获stdout、stderr、exit_code"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "SandboxManager销毁环境"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "ExecutionLogger记录执行日志"
+        },
+        {
+          "from": "",
+          "to": "",
+          "step_text": "返回ExecutionResult"
+        }
+      ]
+    }
+  },
+  "mock_prompt_contracts": {
+    "L1": {
+      "mentioned_components": [
+        "DataValidator",
+        "ErrorHandler",
+        "EventNormalizer",
+        "ProtocolAdapter",
+        "SessionManager"
+      ]
+    },
+    "L2": {
+      "mentioned_components": [
+        "ContextAssembler",
+        "HistoryRetriever",
+        "RateLimiter",
+        "SessionManager",
+        "ToolPreparer"
+      ]
+    },
+    "L3": {
+      "mentioned_components": [
+        "ErrorTranslator",
+        "LLMManager",
+        "MemoryAccessor",
+        "ReActEngine",
+        "SecurityGuard",
+        "TaskPlanner",
+        "ToolCaller"
+      ]
+    },
+    "L4": {
+      "mentioned_components": [
+        "CacheManager",
+        "EmbeddingService",
+        "IndexManager",
+        "MemoryStore",
+        "TextChunker",
+        "VectorStore"
+      ]
+    },
+    "L5": {
+      "mentioned_components": [
+        "BashAnalyzer",
+        "ConfirmationManager",
+        "ParameterValidator",
+        "PermissionManager",
+        "ResultFormatter",
+        "ToolExecutor",
+        "ToolRegistry"
+      ]
+    },
+    "L6": {
+      "mentioned_components": [
+        "CodeExecutor",
+        "DockerController",
+        "ExecutionLogger",
+        "ResourceLimiter",
+        "SandboxManager",
+        "SecurityEnforcer"
+      ]
+    }
+  },
+  "code_contracts": {
+    "xml": {
+      "L1_UserInteraction": {
+        "components": [
+          "ProtocolAdapter",
+          "DataValidator",
+          "EventNormalizer",
+          "ErrorHandler",
+          "SessionManager"
+        ],
+        "implemented": true
+      },
+      "L2_ControlGateway": {
+        "components": [
+          "SessionManager",
+          "RateLimiter",
+          "ContextAssembler",
+          "HistoryRetriever",
+          "ToolPreparer",
+          "MemoryAccessor"
+        ],
+        "implemented": true
+      },
+      "L3_Orchestration": {
+        "components": [
+          "ReActEngine",
+          "TaskPlanner",
+          "LLMManager",
+          "ToolCaller",
+          "MemoryAccessor",
+          "ErrorTranslator",
+          "SecurityGuard"
+        ],
+        "implemented": true
+      },
+      "L4_MemoryKnowledge": {
+        "components": [
+          "VectorStore",
+          "EmbeddingService",
+          "TextChunker",
+          "MemoryStore",
+          "IndexManager",
+          "CacheManager"
+        ],
+        "implemented": true
+      },
+      "L5_ToolsCapabilities": {
+        "components": [
+          "ToolRegistry",
+          "ParameterValidator",
+          "ToolExecutor",
+          "ResultFormatter",
+          "ToolMetadataManager",
+          "BashAnalyzer",
+          "TaskManager",
+          "ConfirmationManager",
+          "PermissionManager"
+        ],
+        "implemented": true
+      },
+      "L6_RuntimeEnvironment": {
+        "components": [
+          "RuntimeEnvironment",
+          "DockerSandbox",
+          "SecurityEnforcer",
+          "SandboxManager",
+          "ResourceLimiter",
+          "CodeExecutor",
+          "FileSystemManager",
+          "DockerController",
+          "ExecutionLogger"
+        ],
+        "implemented": true
+      }
+    },
+    "code": {
+      "L1": {
+        "classes": [
+          "UserInteraction",
+          "ProtocolAdapter",
+          "TelegramAdapter",
+          "WebSocketAdapter",
+          "HttpWebhookAdapter",
+          "DataValidator",
+          "ErrorHandler",
+          "EventNormalizer",
+          "SessionManager"
+        ],
+        "functions": [
+          "receive_payload",
+          "normalize_event",
+          "validate_input"
+        ]
+      },
+      "L2": {
+        "classes": [
+          "ControlGateway",
+          "SessionManager",
+          "RateLimiter",
+          "ToolPreparer",
+          "MemoryAccessor",
+          "HistoryRetriever",
+          "ContextAssembler"
+        ],
+        "functions": [
+          "process_event",
+          "create_session",
+          "check_rate_limit",
+          "prepare_tools"
+        ]
+      },
+      "L3": {
+        "classes": [
+          "Orchestration",
+          "ReActEngine",
+          "TaskPlanner",
+          "LLMManager",
+          "MemoryAccessor",
+          "SecurityGuard",
+          "ToolCaller",
+          "ErrorTranslator"
+        ],
+        "functions": [
+          "run",
+          "generate_thought",
+          "plan",
+          "complete",
+          "retrieve_relevant"
+        ]
+      },
+      "L4": {
+        "classes": [
+          "MemoryKnowledge",
+          "EmbeddingService",
+          "TextChunker",
+          "VectorStore",
+          "MemoryStore",
+          "IndexManager",
+          "CacheManager"
+        ],
+        "functions": [
+          "search",
+          "store",
+          "embed",
+          "retrieve_history"
+        ]
+      },
+      "L5": {
+        "classes": [
+          "ToolsCapabilities",
+          "BashAnalyzer",
+          "TaskManager",
+          "ConfirmationManager",
+          "PermissionManager",
+          "ToolRegistry",
+          "ParameterValidator",
+          "ToolExecutor",
+          "ResultFormatter"
+        ],
+        "functions": [
+          "execute",
+          "analyze",
+          "submit_task",
+          "check_permission"
+        ]
+      },
+      "L6": {
+        "classes": [
+          "RuntimeEnvironment",
+          "DockerSandbox",
+          "DockerController",
+          "SecurityEnforcer",
+          "SandboxConfig",
+          "SandboxManager",
+          "ResourceLimiter",
+          "CodeExecutor",
+          "ExecutionLogger"
+        ],
+        "functions": [
+          "run_code",
+          "create",
+          "check"
+        ]
+      }
+    },
+    "mock": {
+      "layers": [
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6"
+      ],
+      "prompt_component_mentions": {
+        "L1": [
+          "ProtocolAdapter",
+          "DataValidator"
+        ],
+        "L2": [
+          "RateLimiter",
+          "SessionManager"
+        ],
+        "L3": [
+          "ReActEngine",
+          "TaskPlanner",
+          "LLMManager"
+        ],
+        "L5": [
+          "ToolRegistry",
+          "BashAnalyzer",
+          "TaskManager"
+        ],
+        "L6": [
+          "RuntimeEnvironment",
+          "DockerSandbox",
+          "SecurityEnforcer"
+        ]
+      }
+    }
+  }
+}

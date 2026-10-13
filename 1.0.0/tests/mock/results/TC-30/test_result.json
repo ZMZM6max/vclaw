@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-30",
+  "test_name": "复杂组合型链式任务",
+  "status": "failed",
+  "e2e_status": "failed",
+  "semantic_match": true,
+  "semantic_reason": "",
+  "final_response": null,
+  "execution_time": 51.038403034210205,
+  "layer_count": 6,
+  "error_message": "L6错误: 检测到危险操作: 尝试使用禁止导入模块 os",
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-30",
+  "timestamp": "2026-04-21T18:28:20.252555"
+}

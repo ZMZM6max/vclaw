@@ -1,0 +1,78 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:18:17.004437",
+  "execution_time": 5.73694109916687,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "3860ac7f-417d-4717-9e38-ee0f1a005742",
+    "query": "帮我给马化腾发个微信说我辞职了",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "results": [],
+    "query_embedding": null,
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收检索请求: operation=retrieve_and_search, query=帮我给马化腾发个微信说我辞职了",
+      "[2] CacheManager检查: 未命中（无可用缓存条目）",
+      "[3] EmbeddingService: 该请求为retrieve_and_search聚合输入，未触发标准search embedding生成",
+      "[4] VectorStore: 未执行标准相似度检索（输入未提供可检索索引且search_count=0）",
+      "[5] MemoryStore: 历史检索请求处理完成（history_count=0，未返回历史消息）",
+      "[6] IndexManager: 未触发索引管理操作",
+      "[7] 返回: 空结果集"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已执行缓存检查，但未命中可复用结果。",
+        "output_summary": "cache_hit=false"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "当前输入为retrieve_and_search聚合请求，未进入标准search embedding生成流程。",
+        "output_summary": "未生成query_embedding"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "本次请求不包含store操作，未进行文本分块。",
+        "output_summary": "not triggered"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "未提供可执行的标准检索索引/向量输入，未执行相似度搜索。",
+        "output_summary": "results=[]"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "success",
+        "reason": "已处理历史检索上下文，但当前history_count为0，返回空历史。",
+        "output_summary": "messages=[]"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "本次请求不涉及索引创建、更新或删除。",
+        "output_summary": "not triggered"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收检索请求: operation=retrieve_and_search, query=帮我给马化腾发个微信说我辞职了",
+    "[2] CacheManager检查: 未命中（无可用缓存条目）",
+    "[3] EmbeddingService: 该请求为retrieve_and_search聚合输入，未触发标准search embedding生成",
+    "[4] VectorStore: 未执行标准相似度检索（输入未提供可检索索引且search_count=0）",
+    "[5] MemoryStore: 历史检索请求处理完成（history_count=0，未返回历史消息）",
+    "[6] IndexManager: 未触发索引管理操作",
+    "[7] 返回: 空结果集"
+  ],
+  "error": null
+}

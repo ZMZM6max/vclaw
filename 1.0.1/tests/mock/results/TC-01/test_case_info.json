@@ -1,0 +1,37 @@
+{
+  "test_id": "TC-01",
+  "test_name": "新建并写入文件",
+  "category": "正常功能",
+  "priority": "P0",
+  "user_input": "帮我在桌面上建个文档，写上今天下午3点开周会",
+  "precondition": "系统联网正常，桌面目录有写入权限",
+  "react_flow": "Thought: 需创建文本文件并写入内容 -> Action: 调用 File_Create 工具 -> Observation: 创建并写入成功",
+  "expected_result": "系统: 在沙盒映射的桌面目录生成txt/docx文件。结果: 回复'已为您在桌面建好文件，内容是下午3点开周会。'",
+  "risk_level": "低 - 路径解析错误导致文件建错位置",
+  "test_type": "功能",
+  "tags": [
+    "可自动化",
+    "必过"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "帮我在桌面上建个文档，写上今天下午3点开周会"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:14:16.242820"
+}

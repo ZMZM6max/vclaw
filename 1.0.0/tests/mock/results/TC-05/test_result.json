@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-05",
+  "test_name": "意图过于宽泛",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是直接给出确认和整理建议的正向回复，而实际回复将其视为高危操作并要求先确认，语义上不一致。",
+  "final_response": "“帮我整理一下电脑”属于高危可恢复操作，我需要先确认你的具体目标后才能继续。你可以告诉我你想整理的是：桌面、下载文件夹、文档，还是某个具体目录？如果你愿意，我也可以按“按类型归类 / 删除重复文件 / 清理临时文件”帮你制定整理方案。",
+  "execution_time": 20.160000562667847,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-05",
+  "timestamp": "2026-04-21T18:16:45.665940"
+}

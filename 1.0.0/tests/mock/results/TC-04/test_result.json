@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-04",
+  "test_name": "指代不清的指令",
+  "status": "passed",
+  "e2e_status": "completed",
+  "semantic_match": true,
+  "semantic_reason": "两者核心语义一致，都是在未明确具体文件前拒绝直接执行文件操作，并要求用户提供文件名。",
+  "final_response": "请先确认一下要删除的具体文件名或路径，我不能在不明确目标的情况下执行删除操作。",
+  "execution_time": 20.02091145515442,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-04",
+  "timestamp": "2026-04-21T18:16:22.337057"
+}

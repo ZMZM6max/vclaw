@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-16",
+  "test_name": "飞书远程读取文件内容",
+  "category": "飞书集成",
+  "priority": "P1",
+  "user_input": "把那个发票压缩包里的第一张图片发给我",
+  "precondition": "紧接TC-15",
+  "react_flow": "Thought: 解析压缩包提取图片 -> Action: File_Unzip -> 读取图片 -> Feishu_SendImage",
+  "expected_result": "系统: 完成解压和介质传输。结果: 用户的飞书App直接收到图片",
+  "risk_level": "高 - 跨平台文件传输格式损坏",
+  "test_type": "功能",
+  "tags": [
+    "手工"
+  ],
+  "payload": {
+    "channel": "feishu",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把那个发票压缩包里的第一张图片发给我"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:21:01.998024"
+}

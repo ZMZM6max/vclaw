@@ -1,0 +1,354 @@
+{
+  "request_id": "tc-02",
+  "start_time": "2026-04-21T18:14:49.602036",
+  "end_time": "2026-04-21T18:15:19.920571",
+  "status": "failed",
+  "error_message": "L5错误: 路径安全检查失败：file_read 仅允许访问 documents/ 下的相对安全路径，当前路径包含非法盘符片段或路径映射不一致，且参数与用户原始输入不一致，请确认",
+  "final_response": null,
+  "layer_results": [
+    {
+      "layer_name": "L1",
+      "timestamp": "2026-04-21T18:14:49.602081",
+      "execution_time": 5.107072353363037,
+      "processing_log": [
+        "[1] 接收原始数据 - 渠道: telegram",
+        "[2] ProtocolAdapter解析数据",
+        "[3] DataValidator验证字段完整性",
+        "[4] EventNormalizer转换为StandardEvent",
+        "[5] 验证通过，返回结果"
+      ],
+      "component_trace": [
+        {
+          "component": "ProtocolAdapter",
+          "status": "success",
+          "reason": "已根据telegram渠道完成协议适配并提取原始消息字段。",
+          "output_summary": {
+            "channel": "telegram",
+            "raw_keys": [
+              "update_id",
+              "message"
+            ]
+          }
+        },
+        {
+          "component": "DataValidator",
+          "status": "success",
+          "reason": "字段完整性与类型规则校验通过，content与user_id均有效。",
+          "output_summary": {
+            "user_id_length": 13,
+            "content_length": 24,
+            "timestamp_valid": true
+          }
+        },
+        {
+          "component": "EventNormalizer",
+          "status": "success",
+          "reason": "已将telegram原始数据标准化为StandardEvent。",
+          "output_summary": {
+            "standard_event_keys": [
+              "channel",
+              "user_id",
+              "content",
+              "timestamp",
+              "metadata"
+            ]
+          }
+        },
+        {
+          "component": "ErrorHandler",
+          "status": "skipped",
+          "reason": "本次处理未发生错误，未触发重试与退避机制。",
+          "output_summary": {
+            "retry_count": 0
+          }
+        },
+        {
+          "component": "SessionManager",
+          "status": "skipped",
+          "reason": "当前任务未要求会话映射创建或复用，未触发会话管理流程。",
+          "output_summary": {
+            "session_action": "none"
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L2",
+      "timestamp": "2026-04-21T18:14:59.209830",
+      "execution_time": 6.044598579406738,
+      "processing_log": [
+        "[1] 限流检查: 用户test_user_001剩余59次请求",
+        "[2] 会话管理: 使用输入中的session_id ce406707-31e3-48d9-a54a-73ae8f632468",
+        "[3] 历史检索: 从L4获取0条历史记录",
+        "[4] 记忆检索: 从L4获取0条相关记忆",
+        "[5] 工具准备: 根据权限筛选出4个可用工具",
+        "[6] 上下文组装: 生成完整的L3输入"
+      ],
+      "component_trace": [
+        {
+          "component": "RateLimiter",
+          "status": "success",
+          "reason": "通过用户、IP和全局限流检查",
+          "output_summary": "user_remaining=59, ip_allowed=true, global_allowed=true"
+        },
+        {
+          "component": "SessionManager",
+          "status": "success",
+          "reason": "会话检索成功，采用输入会话ID并组装会话上下文",
+          "output_summary": "session_id=ce406707-31e3-48d9-a54a-73ae8f632468, ttl=3600s"
+        },
+        {
+          "component": "HistoryRetriever",
+          "status": "success",
+          "reason": "从L4检索到的真实历史为空列表",
+          "output_summary": "history_count=0"
+        },
+        {
+          "component": "ToolPreparer",
+          "status": "success",
+          "reason": "根据用户权限筛选可用工具完成",
+          "output_summary": "available_tools=calculator,file_read,file_write,python_repl"
+        },
+        {
+          "component": "ContextAssembler",
+          "status": "success",
+          "reason": "已完成StandardEvent与会话、历史、工具、记忆的上下文组装",
+          "output_summary": "l3_input_ready=true"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L3",
+      "timestamp": "2026-04-21T18:15:05.261006",
+      "execution_time": 5.9037768840789795,
+      "processing_log": [
+        "[1] 接收SessionContext",
+        "[2] SecurityGuard: 正常请求，未触发敏感/恶意规则",
+        "[3] MemoryAccessor: 未发现相关可用记忆",
+        "[4] TaskPlanner: 识别为复合任务（读取文件并总结）",
+        "[5] LLMManager: 生成工具调用决策",
+        "[6] ReActEngine: 决定进入工具调用",
+        "[7] ToolCaller: 发起file_read读取文件"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityGuard",
+          "status": "active",
+          "reason": "完成安全分类，判断为正常文件读取请求",
+          "output_summary": "normal"
+        },
+        {
+          "component": "MemoryAccessor",
+          "status": "success",
+          "reason": "检索相关记忆",
+          "output_summary": "未检索到相关记忆"
+        },
+        {
+          "component": "TaskPlanner",
+          "status": "success",
+          "reason": "将请求规划为读取并总结PDF内容的复合任务",
+          "output_summary": "read_and_summarize"
+        },
+        {
+          "component": "LLMManager",
+          "status": "success",
+          "reason": "生成了文件读取的工具调用决策",
+          "output_summary": "agent_action:file_read"
+        },
+        {
+          "component": "ReActEngine",
+          "status": "active",
+          "reason": "进入ReAct决策循环，等待工具执行结果",
+          "output_summary": "tool_call_pending"
+        },
+        {
+          "component": "ToolCaller",
+          "status": "active",
+          "reason": "准备调用file_read读取目标文件",
+          "output_summary": "path=D:/Q3财报.pdf"
+        },
+        {
+          "component": "ErrorTranslator",
+          "status": "skipped",
+          "reason": "当前尚未产生工具错误，不需要错误转译",
+          "output_summary": "not_triggered"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L5",
+      "timestamp": "2026-04-21T18:15:11.168132",
+      "execution_time": 4.309241771697998,
+      "processing_log": [
+        "[1] 接收AgentAction",
+        "[2] ToolRegistry: 查找工具",
+        "[3] ParameterValidator: 验证参数失败（路径安全检查/参数保真校验未通过）"
+      ],
+      "component_trace": [
+        {
+          "component": "ToolRegistry",
+          "status": "active",
+          "reason": "接收请求并开始查找目标工具",
+          "output_summary": "已定位 action=file_read"
+        },
+        {
+          "component": "ParameterValidator",
+          "status": "error",
+          "reason": "路径包含不一致的盘符映射片段，未通过安全校验与参数保真校验",
+          "output_summary": "path=documents/D:/Q3财报.pdf 不符合安全路径规则"
+        },
+        {
+          "component": "ToolExecutor",
+          "status": "skipped",
+          "reason": "参数验证失败，未进入执行阶段"
+        },
+        {
+          "component": "ResultFormatter",
+          "status": "skipped",
+          "reason": "工具未执行，无结果可格式化"
+        },
+        {
+          "component": "PermissionManager",
+          "status": "success",
+          "reason": "已检查权限，用户具备 file_read 权限",
+          "output_summary": "file_read=allowed"
+        },
+        {
+          "component": "ConfirmationManager",
+          "status": "skipped",
+          "reason": "file_read 不属于高危二次确认操作"
+        },
+        {
+          "component": "BashAnalyzer",
+          "status": "skipped",
+          "reason": "当前工具不是 terminal"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L6",
+      "timestamp": "2026-04-21T18:15:15.479317",
+      "execution_time": 4.429692029953003,
+      "processing_log": [
+        "[1] 输入验证: 检测到操作类型为 environment_prepare，action_type 为 file_read",
+        "[2] 安全检查: 通过 - 但请求不属于代码执行任务",
+        "[3] SandboxManager: skipped - 非 run_code 场景，不创建沙盒",
+        "[4] ResourceLimiter: skipped - 未进入代码执行流程",
+        "[5] CodeExecutor: skipped - 未提供可执行代码",
+        "[6] DockerController: skipped - 未触发容器管理",
+        "[7] ExecutionLogger: skipped - 任务未执行，未记录执行日志"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityEnforcer",
+          "status": "success",
+          "reason": "完成输入类型与基础安全检查，确认非代码执行请求",
+          "output_summary": "识别为 file_read 请求"
+        },
+        {
+          "component": "SandboxManager",
+          "status": "skipped",
+          "reason": "当前请求不是 run_code 代码执行，不创建沙盒",
+          "output_summary": "未创建环境"
+        },
+        {
+          "component": "ResourceLimiter",
+          "status": "skipped",
+          "reason": "未进入代码执行流程，因此无需设置资源限制",
+          "output_summary": "未设置限制"
+        },
+        {
+          "component": "CodeExecutor",
+          "status": "skipped",
+          "reason": "没有可执行代码输入",
+          "output_summary": "无代码"
+        },
+        {
+          "component": "DockerController",
+          "status": "skipped",
+          "reason": "未使用 Docker 模式或容器生命周期管理",
+          "output_summary": "未触发"
+        },
+        {
+          "component": "ExecutionLogger",
+          "status": "skipped",
+          "reason": "任务未实际执行，未产生执行日志",
+          "output_summary": "未记录"
+        }
+      ],
+      "error": null
+    }
+  ],
+  "layer_transfers": [
+    {
+      "from_layer": "L1",
+      "to_layer": "L2",
+      "data_type": "StandardEvent",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "帮我看看D盘那个《Q3财报.pdf》里面重点说了啥？",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "ce406707-31e3-48d9-a54a-73ae8f632468"
+          }
+        }
+      },
+      "timestamp": "2026-04-21T18:14:54.711306"
+    },
+    {
+      "from_layer": "L2",
+      "to_layer": "L3",
+      "data_type": "L3CompleteInput",
+      "data": {
+        "session_context": {
+          "session_id": "ce406707-31e3-48d9-a54a-73ae8f632468",
+          "user_id": "test_user_001",
+          "current_query": "帮我看看D盘那个《Q3财报.pdf》里面重点说了啥？",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59,
+            "source": "telegram",
+            "message_id": 1
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      },
+      "timestamp": "2026-04-21T18:15:05.260815"
+    },
+    {
+      "from_layer": "L3",
+      "to_layer": "L5",
+      "data_type": "AgentAction",
+      "data": {
+        "agent_action": {
+          "action": "file_read",
+          "action_input": {
+            "path": "documents/D:/Q3财报.pdf"
+          },
+          "thought": "用户要查看D盘中的《Q3财报.pdf》并总结重点，属于文件读取与内容分析任务。根据规则应先调用文件读取工具获取文件内容，再进行总结。",
+          "_path_sanitized": true,
+          "_original_path": "D:/Q3财报.pdf"
+        }
+      },
+      "timestamp": "2026-04-21T18:15:11.168025"
+    }
+  ]
+}

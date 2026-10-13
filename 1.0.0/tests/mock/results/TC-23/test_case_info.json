@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-23",
+  "test_name": "文件不存在（用户拼写错误）",
+  "category": "异常处理",
+  "priority": "P2",
+  "user_input": "打开桌面的《明天周报.docx》",
+  "precondition": "实际上叫《明天的周报.docx》",
+  "react_flow": "Thought: File_Search(明天周报.docx) 失败 -> Action: 自动降级为模糊搜索 -> Observation: 找到相似文件",
+  "expected_result": "系统: 执行模糊匹配。结果: 回复'没找到《明天周报》，您说的是不是《明天的周报》？需要帮您打开它吗？'",
+  "risk_level": "低 - 死板报错'文件不存在'导致体验差",
+  "test_type": "UX",
+  "tags": [
+    "可自动化"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "打开桌面的《明天周报.docx》"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:23:59.561149"
+}

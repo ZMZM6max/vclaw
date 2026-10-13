@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-28",
+  "test_name": "特殊字符文件名处理",
+  "category": "文件处理",
+  "priority": "P2",
+  "user_input": "帮我建个文件，名字叫 <我的*日记?> ",
+  "precondition": "包含OS不允许的特殊字符 *、?、<、>",
+  "react_flow": "Thought: File_Create 参数包含非法字符 -> Action: 自动清洗文件名或提示用户修改",
+  "expected_result": "系统: 过滤特殊字符，或捕获OS创建异常。结果: 回复文件名处理结果",
+  "risk_level": "中 - Agent因未处理非法字符直接抛出底层OS错误崩溃",
+  "test_type": "功能",
+  "tags": [
+    "可自动化"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "帮我建个文件，名字叫 <我的*日记?> "
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:26:51.166001"
+}

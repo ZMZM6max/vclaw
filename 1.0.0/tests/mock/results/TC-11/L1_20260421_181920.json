@@ -1,0 +1,68 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:19:16.437638",
+  "execution_time": 4.545270919799805,
+  "input_data": {
+    "channel": "multi_turn",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把它发给我的飞书文件助手"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "error",
+    "error_code": "UnsupportedChannelError",
+    "error_message": "不支持的渠道类型: multi_turn。允许的channel仅为 telegram, websocket, webhook。",
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: multi_turn",
+      "[2] 验证失败: UnsupportedChannelError - 不支持的渠道类型"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "skipped",
+        "reason": "channel为multi_turn，不匹配任何已定义适配器，未执行协议解析"
+      },
+      {
+        "component": "DataValidator",
+        "status": "error",
+        "reason": "渠道校验失败：multi_turn不在允许列表telegram/websocket/webhook中",
+        "output_summary": "UnsupportedChannelError"
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "skipped",
+        "reason": "数据未通过渠道校验，未进行标准化"
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "success",
+        "reason": "已记录错误并终止处理流程",
+        "output_summary": "UnsupportedChannelError, no retry required for unsupported channel"
+      },
+      {
+        "component": "SessionManager",
+        "status": "skipped",
+        "reason": "本次请求在渠道校验阶段失败，未创建或复用会话"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: multi_turn",
+    "[2] 验证失败: UnsupportedChannelError - 不支持的渠道类型"
+  ],
+  "error": null
+}

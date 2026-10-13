@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-22",
+  "test_name": "文件操作中途文件被占用",
+  "category": "异常处理",
+  "priority": "P1",
+  "user_input": "把那个1G的视频文件移动到桌面",
+  "precondition": "移动过程中，用户在电脑上手动打开了该视频",
+  "react_flow": "Thought: 执行 File_Move -> Observation: OS报错文件被占用（File in use）",
+  "expected_result": "系统: 捕获占用异常。结果: 回复'我正准备移动它呢，但是发现这个视频正在被使用，请您先关掉它我再试。'",
+  "risk_level": "中 - 程序崩溃卡死，无界面反馈",
+  "test_type": "异常/UX",
+  "tags": [
+    "手工"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把那个1G的视频文件移动到桌面"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:23:27.956033"
+}

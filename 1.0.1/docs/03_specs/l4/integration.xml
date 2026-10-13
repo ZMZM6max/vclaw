@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L4 Component: Integration
+  拆分自: L4_MemoryKnowledge.xml
+  用途: L4层数据流和调用边定义
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L4_MemoryKnowledge.xml
+-->
+<Component id="L4.Integration" name="L4Integration" version="1.0">
+
+  <Description>L4层内部组件间的数据流和与外部层的调用边</Description>
+
+  <DataFlow id="search">
+    <Description>语义检索数据流</Description>
+    <Step order="1">接收检索请求（query: str）</Step>
+    <Step order="2">CacheManager检查缓存（避免重复Embedding）</Step>
+    <Step order="3" condition="缓存未命中">EmbeddingService将query转为向量</Step>
+    <Step order="4">VectorStore执行相似度检索</Step>
+    <Step order="5">返回top_k个最相关的文档片段</Step>
+    <Step order="6">CacheManager缓存结果</Step>
+  </DataFlow>
+
+  <DataFlow id="store_conversation">
+    <Description>对话存储数据流（含自动压缩）</Description>
+    <Step order="1">接收对话存储请求（session_id, messages）</Step>
+    <Step order="2">压缩检查：len(messages) &gt;= max_messages(20)?</Step>
+    <Step order="3" condition="需要压缩">MemoryCompressor执行提取式摘要
+      - 保留最近 compression_threshold(10) 条消息
+      - 对更老消息生成摘要：User asked + Assistant responded about
+      - 超过5个要点时保留头2+尾2
+      - 包装为 role="system" 的摘要消息
+    </Step>
+    <Step order="4">MemoryStore.save_conversation(session_id, messages)</Step>
+    <Step order="5">InMemory: 写入进程内存 / File: 写入 JSON 文件</Step>
+    <Step order="6">返回存储结果</Step>
+  </DataFlow>
+
+  <DataFlow id="store_document">
+    <Description>文档存储数据流（含自动分块和级联删除映射）</Description>
+    <Step order="1">接收文档（document, metadata），校验 doc_id</Step>
+    <Step order="2">TextChunker.split(document) 自动分块</Step>
+    <Step order="3">EmbeddingService.embed_batch(chunks) 批量向量化</Step>
+    <Step order="4">VectorStore.add_documents(docs) 存入向量库</Step>
+    <Step order="5">记录 _doc_chunks[doc_id] = [chunk_id_0, chunk_id_1, ...]</Step>
+    <Step order="6" condition="knowledge_store 启用">KnowledgeMemory.store_knowledge(doc_id, content[:500], metadata)</Step>
+    <Step order="7">返回存储结果</Step>
+  </DataFlow>
+
+  <InternalCallEdges>
+    <Edge from="MemoryKnowledge" to="EmbeddingCache" method="get_embedding() / set_embedding()">
+      <Description>主类通过EmbeddingCache缓存Embedding结果</Description>
+    </Edge>
+    <Edge from="MemoryKnowledge" to="SearchCache" method="get_search_results() / set_search_results()">
+      <Description>主类通过SearchCache缓存搜索结果</Description>
+    </Edge>
+    <Edge from="MemoryKnowledge" to="TextChunker" method="split()">
+      <Description>存储文档前自动分块</Description>
+    </Edge>
+    <Edge from="MemoryKnowledge" to="VectorStore" method="add_documents() / search() / delete()">
+      <Description>向量存储操作。delete()时通过_doc_chunks映射级联删除文档的全部chunk</Description>
+    </Edge>
+    <Edge from="MemoryKnowledge" to="MemoryStore" method="save_conversation() / load_conversation() / save_preference() / load_preference()">
+      <Description>对话历史和偏好存储</Description>
+    </Edge>
+    <Edge from="MemoryKnowledge" to="KnowledgeMemory" method="store_knowledge() / retrieve_knowledge() / list_knowledge() / delete_knowledge()">
+      <Description>存储文档时同步写入知识库元数据；门面代理KnowledgeMemory的CRUD操作</Description>
+    </Edge>
+    <Edge from="MemoryKnowledge" to="IndexManager" method="create_index() / delete_index() / list_indices() / get_index_stats() / optimize_index() / index_exists()">
+      <Description>门面代理IndexManager的索引生命周期管理操作</Description>
+    </Edge>
+  </InternalCallEdges>
+
+  <ExternalCallEdges>
+    <Edge from="L3.MemoryAccessor" to="L4.MemoryStore" method="retrieve_history(session_id, limit)" trigger="L2组装L3输入时">
+      <Description>L2通过L3.MemoryAccessor访问L4.MemoryStore获取会话历史</Description>
+    </Edge>
+
+    <Edge from="L3.MemoryAccessor" to="L4.IndexManager" method="search(query, top_k)" trigger="L2组装L3输入时">
+      <Description>L2通过L3.MemoryAccessor访问L4.IndexManager进行知识检索</Description>
+    </Edge>
+
+    <Edge from="L3.MemoryAccessor" to="L4.VectorStore" method="search(query_embedding, top_k)" trigger="L3 ReAct循环中需要知识增强时">
+      <Description>L3在ReAct循环中通过MemoryAccessor查询L4.VectorStore获取相关知识片段</Description>
+    </Edge>
+
+    <Edge from="L3.ToolCaller" to="L4.MemoryStore" method="store_conversation(session_id, messages)" trigger="工具执行完成后">
+      <Description>L3在工具执行完成后将对话存储到L4.MemoryStore，供后续检索使用</Description>
+    </Edge>
+
+    <Edge from="L3.MemoryAccessor" to="L4.MemoryKnowledge" method="search_with_scores(query, top_k)" trigger="需要带分数的检索结果时">
+      <Description>L3在需要完整检索结果（含相似度分数和元数据）时调用</Description>
+    </Edge>
+
+    <Edge from="L3.MemoryAccessor" to="L4.MemoryKnowledge" method="store_batch(documents)" trigger="批量知识入库时">
+      <Description>L3在批量导入知识文档时调用</Description>
+    </Edge>
+  </ExternalCallEdges>
+
+  <Note>所有L4组件均为被动调用层，不主动发起请求，仅响应L2/L3的显式调用</Note>
+
+</Component>

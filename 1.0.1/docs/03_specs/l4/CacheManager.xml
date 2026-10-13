@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L4 Component: CacheManager
+  拆分自: L4_MemoryKnowledge.xml
+  用途: 缓存管理器，缓存热点Embedding和检索结果
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L4_MemoryKnowledge.xml
+-->
+<Component id="L4.CacheManager" name="CacheManager" version="1.0">
+
+  <Description>缓存管理器，缓存热点Embedding和检索结果</Description>
+
+  <Policy>LRU（最近最少使用）+ TTL（生存时间）</Policy>
+
+  <Configuration>
+    <MaxSize>10000条记录</MaxSize>
+    <TTL>3600秒（1小时）</TTL>
+    <CleanupInterval>300秒（5分钟，背景清理间隔）</CleanupInterval>
+  </Configuration>
+
+  <Interface>
+    <Method name="get">
+      <Signature>get(key: str) -&gt; Optional[Any]</Signature>
+      <Description>获取缓存值</Description>
+    </Method>
+
+    <Method name="set">
+      <Signature>set(key: str, value: Any, ttl: Optional[int] = None) -&gt; bool</Signature>
+      <Description>设置缓存值</Description>
+      <Parameters>
+        <Param name="ttl" default="None">覆盖默认TTL（-1表示永不过期）</Param>
+      </Parameters>
+    </Method>
+
+    <Method name="delete">
+      <Signature>delete(key: str) -&gt; bool</Signature>
+      <Description>删除缓存键</Description>
+    </Method>
+
+    <Method name="clear">
+      <Signature>clear() -&gt; bool</Signature>
+      <Description>清空所有缓存</Description>
+    </Method>
+
+    <Method name="exists">
+      <Signature>exists(key: str) -&gt; bool</Signature>
+      <Description>检查键是否存在且未过期</Description>
+    </Method>
+
+    <Method name="stats">
+      <Signature>stats() -&gt; Dict[str, Any]</Signature>
+      <Description>获取缓存统计信息</Description>
+      <Output>
+        <Field name="size">当前条目数</Field>
+        <Field name="max_size">最大条目数</Field>
+        <Field name="hits">命中次数</Field>
+        <Field name="misses">未命中次数</Field>
+        <Field name="evictions">驱逐次数</Field>
+        <Field name="hit_rate">命中率</Field>
+      </Output>
+    </Method>
+
+    <Method name="get_or_set">
+      <Signature>get_or_set(key: str, factory: Callable[[], Any], ttl: Optional[int] = None) -&gt; Any</Signature>
+      <Description>缓存未命中时调用 factory 生成值并写入</Description>
+    </Method>
+
+    <Method name="get_many">
+      <Signature>get_many(keys: List[str]) -&gt; Dict[str, Any]</Signature>
+      <Description>批量获取缓存值</Description>
+    </Method>
+
+    <Method name="set_many">
+      <Signature>set_many(items: Dict[str, Any], ttl: Optional[int] = None) -&gt; bool</Signature>
+      <Description>批量设置缓存值</Description>
+    </Method>
+
+    <Method name="delete_many">
+      <Signature>delete_many(keys: List[str]) -&gt; int</Signature>
+      <Description>批量删除缓存键，返回实际删除数量</Description>
+    </Method>
+
+    <Method name="keys">
+      <Signature>keys() -&gt; List[str]</Signature>
+      <Description>获取所有未过期的键</Description>
+    </Method>
+
+    <Method name="size">
+      <Signature>size() -&gt; int</Signature>
+      <Description>当前缓存条目数</Description>
+    </Method>
+
+    <Method name="cleanup_expired">
+      <Signature>cleanup_expired() -&gt; int</Signature>
+      <Description>主动清理全部过期条目，返回清理数量</Description>
+    </Method>
+  </Interface>
+
+  <SpecializedCaches>
+    <Cache name="EmbeddingCache">
+      <Description>专门用于缓存Embedding结果，使用内容哈希作为键</Description>
+      <DefaultMaxSize>1000</DefaultMaxSize>
+      <DefaultTTL>3600</DefaultTTL>
+    </Cache>
+
+    <Cache name="SearchCache">
+      <Description>专门用于缓存搜索结果</Description>
+      <DefaultMaxSize>500</DefaultMaxSize>
+      <DefaultTTL>600（10分钟）</DefaultTTL>
+    </Cache>
+  </SpecializedCaches>
+
+</Component>

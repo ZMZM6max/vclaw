@@ -1,0 +1,50 @@
+{
+  "request_id": "tc-31",
+  "start_time": "2026-04-21T18:28:21.258482",
+  "end_time": "2026-04-21T18:28:27.345264",
+  "status": "failed",
+  "error_message": "L1错误: 不支持的渠道类型: feishu。仅支持 telegram, websocket, webhook。",
+  "final_response": null,
+  "layer_results": [
+    {
+      "layer_name": "L1",
+      "timestamp": "2026-04-21T18:28:21.258560",
+      "execution_time": 6.081857442855835,
+      "processing_log": [
+        "[1] 接收原始数据 - 渠道: feishu",
+        "[2] 验证失败: UnsupportedChannelError - 不支持的渠道类型"
+      ],
+      "component_trace": [
+        {
+          "component": "ProtocolAdapter",
+          "status": "error",
+          "reason": "渠道 feishu 不在支持列表中，无法选择对应协议适配器。",
+          "output_summary": "unsupported channel"
+        },
+        {
+          "component": "DataValidator",
+          "status": "skipped",
+          "reason": "由于渠道不被支持，未进入完整字段验证阶段。"
+        },
+        {
+          "component": "EventNormalizer",
+          "status": "skipped",
+          "reason": "前置校验失败，未执行事件标准化。"
+        },
+        {
+          "component": "ErrorHandler",
+          "status": "success",
+          "reason": "已记录错误并终止处理流程，未触发重试。",
+          "output_summary": "UnsupportedChannelError"
+        },
+        {
+          "component": "SessionManager",
+          "status": "skipped",
+          "reason": "本次请求在渠道校验阶段失败，未创建或复用会话映射。"
+        }
+      ],
+      "error": null
+    }
+  ],
+  "layer_transfers": []
+}

@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-13",
+  "test_name": "搜索最新资讯",
+  "status": "failed",
+  "e2e_status": "running",
+  "semantic_match": true,
+  "semantic_reason": "",
+  "final_response": null,
+  "execution_time": 26.18153953552246,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-13",
+  "timestamp": "2026-04-21T18:20:18.312953"
+}

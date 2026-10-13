@@ -1,0 +1,64 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:22:19.092537",
+  "execution_time": 5.949282646179199,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "30bd034f-959a-4d22-995d-75caddea13dc",
+    "query": "帮我总结一下《2025年员工薪资表.xlsx》",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "error",
+    "error_code": 400,
+    "error_type": "InvalidOperationError",
+    "message": "Unsupported operation: retrieve_and_search. Expected one of: search, store, store_conversation, retrieve_history.",
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search",
+      "[2] 参数校验: 失败，操作类型不在规范允许范围内",
+      "[3] 终止处理: 未执行检索/存储流程"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "skipped",
+        "reason": "操作类型无效，未进入缓存检查阶段"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "操作类型无效，未进入Embedding生成阶段"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "操作类型无效，未进入文本分块阶段"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "操作类型无效，未执行向量检索或存储"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "操作类型无效，未执行历史存储或检索"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "操作类型无效，未触发索引管理"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search",
+    "[2] 参数校验: 失败，操作类型不在规范允许范围内",
+    "[3] 终止处理: 未执行检索/存储流程"
+  ],
+  "error": null
+}

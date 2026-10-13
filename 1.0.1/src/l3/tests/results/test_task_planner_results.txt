@@ -1,0 +1,1873 @@
+# L3 任务规划器测试结果
+
+## TC-L3-005: 创建简单任务计划
+**输入**: "计算斐波那契数列前10项"
+
+**LLM 返回** (JSON字符串):
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认斐波那契数列定义：前10项的计算，通常从1, 1开始，每个数为前两个之和",
+    "input": {"request": "计算斐波那契数列前10项"},
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "根据定义和递推关系计算斐波那契数列前10项",
+    "input": {"definition": "F1=1, F2=1, Fn=F(n-1)+F(n-2)"},
+    "depends_on": [1]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "返回计算结果前10项列表",
+    "input": {"sequence_length": 10},
+    "depends_on": [2]
+  }
+]
+```
+
+**组件输出** (Python列表):
+```python
+[
+  {'step': 1, 'action': 'llm', 'description': '确认斐波那契数列定义...', 'input': {...}, 'depends_on': []},
+  {'step': 2, 'action': 'llm', 'description': '根据定义和递推关系计算...', 'input': {...}, 'depends_on': [1]},
+  {'step': 3, 'action': 'llm', 'description': '返回计算结果前10项列表', 'input': {...}, 'depends_on': [2]}
+]
+```
+
+**转换说明**: JSON字符串 → Python列表 (json.loads解析)
+
+状态: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**输入**: "1+1等于几"
+
+**LLM 返回** (JSON字符串):
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Interpret the arithmetic expression 1+1 and determine its value.",
+    "input": {"expression": "1+1"},
+    "depends_on": []
+  }
+]
+```
+
+**组件输出** (Python列表):
+```python
+[
+  {'step': 1, 'action': 'llm', 'description': 'Interpret the arithmetic expression...', 'input': {...}, 'depends_on': []}
+]
+```
+
+**转换说明**: JSON字符串 → Python列表
+
+状态: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**输入**: "在桌面创建一个hello.txt文件"
+
+**LLM 返回** (JSON字符串):
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求：在桌面创建一个名为hello.txt的文件",
+    "input": {"request": "在桌面创建一个hello.txt文件"},
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "准备文件内容（询问用户或创建空文件）",
+    "input": {"filename": "hello.txt", "location": "desktop"},
+    "depends_on": [1]
+  }
+]
+```
+
+**组件输出** (Python列表):
+```python
+[
+  {'step': 1, 'action': 'llm', 'description': '确认用户需求...', 'input': {...}, 'depends_on': []},
+  {'step': 2, 'action': 'llm', 'description': '准备文件内容...', 'input': {...}, 'depends_on': [1]}
+]
+```
+
+**转换说明**: JSON字符串 → Python列表
+
+状态: ✅ 通过
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-27 19:28:52
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-27 19:28:56
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "1+1等于几"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-27 19:28:58
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-27 19:29:02
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-27 19:29:05
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "先搜索文件A，然后读取并总结"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-27 19:29:05
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-27 19:30:08
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-27 19:30:11
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "1+1等于几"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-27 19:30:14
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-27 19:30:16
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-27 19:30:20
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "先搜索文件A，然后读取并总结"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-27 19:30:20
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-27 20:51:16
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-27 20:51:19
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "1+1等于几"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-27 20:51:22
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-27 20:51:25
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-27 20:51:28
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "先搜索文件A，然后读取并总结"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-27 20:51:28
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-28 15:53:45
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "计算斐波那契数列前10项，按定义生成从第1项开始的序列。",
+    "input": {
+      "task": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "整理并输出前10项结果，确保格式清晰、准确。",
+    "input": {
+      "result_format": "sequence"
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-28 15:53:48
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户问题并进行简单算术推理，计算 1 + 1 的结果。",
+    "input": {
+      "problem": "1+1"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "将计算结果以简洁明确的方式回复给用户。",
+    "input": {
+      "result": "2"
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-28 15:53:51
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户意图：在桌面创建名为 hello.txt 的文件，并确定这是一个文件创建任务。",
+    "input": {
+      "request": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name",
+    "description": "执行文件创建操作，在桌面路径下创建 hello.txt 文件。",
+    "input": {
+      "path": "Desktop/hello.txt",
+      "content": ""
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "向用户确认任务完成，并说明文件已创建在桌面上。",
+    "input": {
+      "result": "桌面上的 hello.txt 文件已创建完成。"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-28 15:53:56
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求是读取桌面上的报告文件并对其内容进行总结，明确需要先找到桌面报告文件。",
+    "input": {
+      "task": "读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool",
+    "description": "在桌面目录中查找报告文件，识别可读取的文档类型（如 .txt, .docx, .pdf 等）。",
+    "input": {
+      "directory": "Desktop",
+      "file_pattern": "report*"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "tool",
+    "description": "读取找到的报告文件内容并提取文本，以便后续总结。",
+    "input": {
+      "file_path": "from_step_2"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "根据提取出的报告内容进行归纳总结，提炼核心要点、结论和关键信息。",
+    "input": {
+      "content": "from_step_3"
+    },
+    "depends_on": [
+      3
+    ]
+  },
+  {
+    "step": 5,
+    "action": "llm",
+    "description": "将总结结果整理成最终答复，直接呈现给用户。",
+    "input": {
+      "summary": "from_step_4"
+    },
+    "depends_on": [
+      4
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-28 15:54:02
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户意图：先搜索文件A，确认其位置或内容来源，以便后续读取。",
+    "input": {
+      "request": "先搜索文件A，然后读取并总结"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_search_file",
+    "description": "搜索文件A，定位文件路径或返回可读取的目标文件。",
+    "input": {
+      "filename": "文件A"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "tool_read_file",
+    "description": "读取步骤2找到的文件内容。",
+    "input": {
+      "file_path": "{{step2.file_path}}"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "根据读取到的文件内容进行总结，提炼要点并形成简要概述。",
+    "input": {
+      "content": "{{step3.content}}"
+    },
+    "depends_on": [
+      3
+    ]
+  },
+  {
+    "step": 5,
+    "action": "llm",
+    "description": "将搜索、读取和总结结果整理并最终回复给用户。",
+    "input": {
+      "summary": "{{step4.summary}}"
+    },
+    "depends_on": [
+      4
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-28 15:54:02
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-28 15:58:20
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户需求：计算斐波那契数列前10项，并确定采用标准定义从0, 1开始生成序列。",
+    "input": {
+      "task": "计算斐波那契数列前10项",
+      "definition": "F0=0, F1=1, Fn=F(n-1)+F(n-2)"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "推导并生成前10项斐波那契数列。",
+    "input": {
+      "method": "递推计算",
+      "count": 10
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "整理计算结果并以清晰格式呈现给用户。",
+    "input": {
+      "format": "列表"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-28 15:58:22
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Interpret the user's arithmetic question and determine the sum of 1 + 1.",
+    "input": {
+      "query": "1+1等于几"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "Present the final answer to the user in a concise form.",
+    "input": {
+      "answer": "2"
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-28 15:58:25
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户意图是需要在桌面创建一个名为 hello.txt 的文件，并整理执行思路。",
+    "input": {
+      "task": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name",
+    "description": "执行文件创建操作，在桌面路径下新建 hello.txt 文件。",
+    "input": {
+      "filename": "hello.txt",
+      "location": "desktop"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "向用户确认文件已创建，并简要说明结果。",
+    "input": {
+      "result": "桌面已创建 hello.txt 文件"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-28 15:58:30
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "明确用户需求：读取桌面上的报告文件，并准备对其内容进行总结。",
+    "input": {
+      "task": "读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name",
+    "description": "访问桌面目录并查找报告文件，读取报告内容。",
+    "input": {
+      "location": "Desktop",
+      "file_type": "report"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "基于读取到的报告内容进行摘要提炼，提取主要结论、关键数据和重点信息。",
+    "input": {
+      "content_source": "step_2_result"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "将总结结果整理成清晰、简洁的最终回复并交付给用户。",
+    "input": {
+      "summary_source": "step_3_result"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-28 15:58:33
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "tool_name",
+    "description": "先搜索文件A，定位文件位置或确认文件内容来源",
+    "input": {
+      "query": "文件A"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name",
+    "description": "读取找到的文件A内容",
+    "input": {
+      "file_reference": "step1_result"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "对文件A内容进行总结，提炼要点并生成简洁概述",
+    "input": {
+      "content": "step2_result"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "向用户输出最终总结结果",
+    "input": {
+      "summary": "step3_result"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-28 15:58:33
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-28 16:02:54
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Determine the first 10 Fibonacci numbers by applying the Fibonacci recurrence starting from the standard initial terms.",
+    "input": {
+      "request": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "Format the computed sequence as a concise response for the user.",
+    "input": {
+      "format": "list"
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-28 16:02:57
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "直接计算用户提出的简单算术题 1+1，并得出结果。",
+    "input": {
+      "expression": "1+1"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "将计算结果以简洁明了的方式返回给用户。",
+    "input": {
+      "result": "2"
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-28 16:03:00
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求是要在桌面创建一个名为 hello.txt 的文件，并确定需要执行文件创建操作。",
+    "input": {
+      "task": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "file_create_tool",
+    "description": "在桌面路径创建空文件 hello.txt。",
+    "input": {
+      "path": "Desktop/hello.txt",
+      "content": ""
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "向用户确认文件已创建，并简要说明文件位置。",
+    "input": {
+      "result": "桌面上的 hello.txt 文件已创建"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-28 16:03:04
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户意图：需要读取桌面上的报告文件并对其内容进行总结。",
+    "input": {
+      "task": "读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool",
+    "description": "访问桌面目录并查找可识别的报告文件。",
+    "input": {
+      "directory": "Desktop",
+      "file_types": [
+        "pdf",
+        "docx",
+        "txt",
+        "xlsx",
+        "pptx"
+      ]
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "tool",
+    "description": "读取找到的报告文件内容并提取文本。",
+    "input": {
+      "source": "desktop_report_file"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "分析提取出的报告文本，归纳主要内容、关键结论和重要信息。",
+    "input": {
+      "content_source": "extracted_report_text"
+    },
+    "depends_on": [
+      3
+    ]
+  },
+  {
+    "step": 5,
+    "action": "llm",
+    "description": "向用户输出报告总结结果。",
+    "input": {
+      "result": "summary_of_report"
+    },
+    "depends_on": [
+      4
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-28 16:03:07
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "tool_search_file",
+    "description": "搜索文件A，定位其具体路径或可访问内容",
+    "input": {
+      "query": "文件A"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_read_file",
+    "description": "读取步骤1中找到的文件内容",
+    "input": {
+      "file_reference": "step1_result"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "对读取到的文件内容进行总结，提炼主要信息",
+    "input": {
+      "content": "step2_result"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "向用户输出最终总结结果",
+    "input": {
+      "summary": "step3_result"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-28 16:03:07
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-28 16:10:01
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "明确斐波那契数列前10项的定义与起始项约定，准备计算所需的序列形式。",
+    "input": {
+      "task": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "根据斐波那契规则逐项推导前10项数值。",
+    "input": {
+      "method": "递推计算",
+      "count": 10
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "整理并输出计算结果给用户。",
+    "input": {
+      "result_format": "数组或列表"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-28 16:10:04
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户问题并确认这是一个简单的加法计算：1 + 1。",
+    "input": {
+      "problem": "1+1等于几"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "直接进行心算并得出结果。",
+    "input": {
+      "expression": "1+1"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "向用户返回最终答案。",
+    "input": {
+      "result": "2"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-28 16:10:11
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求是创建一个名为 hello.txt 的文件，并判断目标位置为桌面。",
+    "input": {
+      "request": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name",
+    "description": "在桌面路径下创建 hello.txt 文件。",
+    "input": {
+      "path": "Desktop/hello.txt",
+      "content": ""
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "向用户确认文件已创建，并简要说明创建结果。",
+    "input": {
+      "result": "桌面上的 hello.txt 文件已创建。"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-28 16:10:17
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求是读取桌面上的报告文件并准备进行内容总结；若文件位置或格式不明确，则根据上下文推断为桌面上的最近或指定报告文件。",
+    "input": {
+      "task": "理解用户要读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name",
+    "description": "读取桌面目录中的报告文件内容，获取需要总结的文本或文档数据。",
+    "input": {
+      "path": "Desktop",
+      "file_type": "report"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "基于读取到的报告内容进行归纳总结，提炼核心主题、关键结论、重要数据和需要注意的事项。",
+    "input": {
+      "content_source": "step_2_result",
+      "summary_focus": [
+        "核心主题",
+        "关键结论",
+        "重要数据",
+        "注意事项"
+      ]
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "将总结结果整理成简洁、清晰的最终回复并发送给用户。",
+    "input": {
+      "result_source": "step_3_result",
+      "format": "concise_summary"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-28 16:10:20
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "tool_name_or_'llm'",
+    "description": "先搜索名为文件A的文件，定位其具体内容或路径。",
+    "input": {
+      "query": "文件A"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name_or_'llm'",
+    "description": "读取文件A的内容。",
+    "input": {
+      "target": "step_1_search_result"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "对读取到的文件内容进行总结，提炼核心信息。",
+    "input": {
+      "content": "step_2_file_content"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "将总结结果整理并最终回复给用户。",
+    "input": {
+      "summary": "step_3_summary"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-28 16:10:20
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-28 16:45:40
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确定斐波那契数列前10项的定义，采用常见起始项 0, 1，并准备计算前10个数。",
+    "input": {
+      "sequence_definition": "F(0)=0, F(1)=1, F(n)=F(n-1)+F(n-2)"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "逐项计算斐波那契数列前10项。",
+    "input": {
+      "count": 10
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "整理并输出斐波那契数列前10项的最终结果给用户。",
+    "input": {
+      "format": "list"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-28 16:45:42
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Compute the arithmetic expression 1+1.",
+    "input": {
+      "expression": "1+1"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "Deliver the final result to the user in Chinese.",
+    "input": {
+      "result": "2"
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-28 16:45:45
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求是在桌面创建一个名为 hello.txt 的文件，并准备执行创建操作。",
+    "input": {
+      "request": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_create_file",
+    "description": "在桌面路径下创建 hello.txt 文件。",
+    "input": {
+      "path": "Desktop/hello.txt",
+      "content": ""
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "向用户确认文件已创建，并简要说明结果。",
+    "input": {
+      "result": "桌面已创建 hello.txt 文件"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-004: 计划完整性-最后一步
+**时间**: 2026-04-28 16:45:48
+**查询**: "读取桌面报告并总结内容"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户需求，确认需要读取桌面上的报告文件并进行内容总结。",
+    "input": {
+      "request": "读取桌面报告并总结内容"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool",
+    "description": "访问桌面目录，查找可作为“报告”的文件并读取其内容。",
+    "input": {
+      "target_location": "desktop",
+      "file_types": [
+        "pdf",
+        "docx",
+        "txt",
+        "md",
+        "xlsx"
+      ]
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "基于读取到的报告内容，提炼核心信息、关键结论和重点要点，并形成简洁总结。",
+    "input": {
+      "content_source": "desktop_report_file_content"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "将总结结果以清晰、简明的方式输出给用户，作为最终答复。",
+    "input": {
+      "output_format": "final_summary"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-005: 依赖关系验证
+**时间**: 2026-04-28 16:45:51
+**查询**: "先搜索文件A，然后读取并总结"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "tool_search",
+    "description": "搜索文件A，定位其具体位置或内容来源。",
+    "input": {
+      "query": "文件A"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_read",
+    "description": "读取步骤1中找到的文件A内容。",
+    "input": {
+      "source": "step1_result"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "对读取到的文件内容进行总结，提炼主要信息。",
+    "input": {
+      "content": "step2_result"
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "向用户输出最终总结结果。",
+    "input": {
+      "summary": "step3_result"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-TP-006: Fallback计划
+**时间**: 2026-04-28 16:45:51
+**查询**: "测试fallback"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {
+      "query": "测试fallback"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---

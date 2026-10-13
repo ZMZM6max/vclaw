@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-24",
+  "test_name": "磁盘空间不足",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是提示硬盘已满并建议清理空间，而实际回复是在拒绝提供受版权保护的地图资源，核心语义不一致。",
+  "final_response": "抱歉，我不能帮助下载或提供受版权保护的最新高清中国地图文件。不过我可以帮你查找官方公开的地图资源入口，或者帮你生成一份不含版权风险的示意地图。",
+  "execution_time": 27.033408880233765,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-24",
+  "timestamp": "2026-04-21T18:25:14.500049"
+}

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L4 Component: VectorStore
+  拆分自: L4_MemoryKnowledge.xml
+  用途: 向量存储抽象，定义统一的向量数据库接口
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L4_MemoryKnowledge.xml
+-->
+<Component id="L4.VectorStore" name="VectorStore" version="1.0">
+
+  <Description>向量存储抽象，定义统一的向量数据库接口</Description>
+
+  <Implementations>
+    <Impl name="ChromaVectorStore">
+      <Description>使用ChromaDB的向量存储实现</Description>
+      <Dependencies>chromadb</Dependencies>
+      <Configuration>
+        <Param name="collection_name" default="vclaw_knowledge">集合名称</Param>
+        <Param name="persist_directory" default="./src/l4/data/chroma_db">持久化目录（null为内存模式）</Param>
+        <Param name="dimension" default="null">Embedding维度</Param>
+        <Param name="distance_metric" default="cosine">距离度量（cosine, l2, ip）</Param>
+      </Configuration>
+    </Impl>
+
+    <Impl name="PineconeVectorStore">
+      <Description>使用Pinecone云服务的向量存储实现（未实现，占位符）</Description>
+      <Status>stub</Status>
+      <Behavior>初始化时抛出 NotImplementedError</Behavior>
+      <Configuration>
+        <Param name="api_key">Pinecone API密钥</Param>
+        <Param name="environment">Pinecone环境</Param>
+        <Param name="index_name" default="default">索引名称</Param>
+        <Param name="dimension" default="null">Embedding维度</Param>
+      </Configuration>
+    </Impl>
+
+    <Impl name="FaissVectorStore">
+      <Description>使用FAISS本地索引的高性能向量存储</Description>
+      <Dependencies>faiss-cpu 或 faiss-gpu</Dependencies>
+      <Configuration>
+        <Param name="dimension" required="true">Embedding维度（必填）</Param>
+        <Param name="index_type" default="IndexFlatIP">索引类型（IndexFlatIP, IndexFlatL2, IndexIVFFlat）</Param>
+        <Param name="nlist" default="100">IVF聚类数（仅IVF索引）</Param>
+      </Configuration>
+    </Impl>
+
+    <Impl name="MemoryVectorStore">
+      <Description>内存向量存储，用于测试和小数据集</Description>
+      <Configuration>
+        <Param name="dimension" default="null">可选的维度验证</Param>
+      </Configuration>
+    </Impl>
+  </Implementations>
+
+  <Interface>
+    <Method name="add_documents">
+      <Signature>add_documents(docs: List[Document]) -&gt; bool</Signature>
+      <Description>添加文档到向量存储</Description>
+      <Input>
+        <Parameter name="docs" type="List[Dict]" required="true">
+          <Field name="id" type="str" required="true">文档唯一标识</Field>
+          <Field name="content" type="str" required="true">文档内容</Field>
+          <Field name="embedding" type="List[float]" required="true">向量表示</Field>
+          <Field name="metadata" type="Dict" required="false">元数据</Field>
+        </Parameter>
+      </Input>
+    </Method>
+
+    <Method name="search">
+      <Signature>search(query_embedding: List[float], top_k: int = 5, filters: Optional[Dict] = None) -&gt; List[Dict]</Signature>
+      <Description>基于向量相似度检索文档</Description>
+      <Input>
+        <Parameter name="query_embedding" type="List[float]" required="true">查询向量</Parameter>
+        <Parameter name="top_k" type="int" default="5">返回结果数量</Parameter>
+        <Parameter name="filters" type="Dict" required="false">元数据过滤条件</Parameter>
+      </Input>
+      <Output>
+        <Field name="id" type="str">文档ID</Field>
+        <Field name="content" type="str">文档内容</Field>
+        <Field name="score" type="float">相似度分数（0-1）</Field>
+        <Field name="metadata" type="Dict">元数据</Field>
+      </Output>
+    </Method>
+
+    <Method name="delete">
+      <Signature>delete(document_ids: List[str]) -&gt; bool</Signature>
+      <Description>按ID删除文档</Description>
+      <Input>
+        <Parameter name="document_ids" type="List[str]" required="true">要删除的文档ID列表</Parameter>
+      </Input>
+    </Method>
+
+    <Method name="get_collection_stats">
+      <Signature>get_collection_stats() -&gt; Dict[str, Any]</Signature>
+      <Description>获取集合统计信息</Description>
+      <Output>
+        <Field name="document_count" type="int">文档数量</Field>
+        <Field name="store_type" type="str">存储类型（memory/chroma/faiss/pinecone）</Field>
+        <Field name="dimension" type="int">Embedding维度</Field>
+        <Field name="collection_name" type="str">集合名称（ChromaDB）</Field>
+        <Field name="distance_metric" type="str">距离度量（cosine/l2/ip）</Field>
+        <Field name="index_type" type="str">索引类型（FAISS）</Field>
+        <Field name="index_count" type="int">索引总条目数（FAISS）</Field>
+      </Output>
+    </Method>
+  </Interface>
+
+  <StaticMethod name="cosine_similarity">
+    <Signature>cosine_similarity(a: List[float], b: List[float]) -&gt; float</Signature>
+    <Description>计算两个向量的余弦相似度</Description>
+  </StaticMethod>
+
+</Component>

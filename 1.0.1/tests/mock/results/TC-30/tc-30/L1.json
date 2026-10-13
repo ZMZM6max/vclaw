@@ -1,0 +1,149 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:27:29.214904",
+  "execution_time": 4.682618618011475,
+  "input_data": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "先把桌面那个'数据'重命名为'今日数据'，然后把它压缩打包发给飞书助手"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "success",
+    "standard_event": {
+      "channel": "telegram",
+      "user_id": "test_user_001",
+      "content": "先把桌面那个'数据'重命名为'今日数据'，然后把它压缩打包发给飞书助手",
+      "timestamp": 1704067200.0,
+      "metadata": {
+        "source": "telegram",
+        "message_id": 1
+      }
+    },
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: telegram",
+      "[2] ProtocolAdapter解析数据",
+      "[3] DataValidator验证字段完整性",
+      "[4] EventNormalizer转换为StandardEvent",
+      "[5] 验证通过，返回结果"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "success",
+        "reason": "TelegramAdapter已完成协议解析并提取标准字段",
+        "output_summary": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content_preview": "先把桌面那个'数据'重命名为'今日数据'，然后把它压缩打包发给飞书助手",
+          "timestamp": 1704067200
+        }
+      },
+      {
+        "component": "DataValidator",
+        "status": "success",
+        "reason": "字段完整性与安全规则校验通过",
+        "output_summary": {
+          "channel_valid": true,
+          "user_id_valid": true,
+          "content_valid": true,
+          "timestamp_valid": true
+        }
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "success",
+        "reason": "已转换为StandardEvent结构",
+        "output_summary": {
+          "standard_event_fields": [
+            "channel",
+            "user_id",
+            "content",
+            "timestamp",
+            "metadata"
+          ]
+        }
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "skipped",
+        "reason": "当前请求处理成功，未触发重试或错误记录机制"
+      },
+      {
+        "component": "SessionManager",
+        "status": "skipped",
+        "reason": "本次处理未要求创建或复用会话映射"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: telegram",
+    "[2] ProtocolAdapter解析数据",
+    "[3] DataValidator验证字段完整性",
+    "[4] EventNormalizer转换为StandardEvent",
+    "[5] 验证通过，返回结果"
+  ],
+  "component_trace": [
+    {
+      "component": "ProtocolAdapter",
+      "status": "success",
+      "reason": "TelegramAdapter已完成协议解析并提取标准字段",
+      "output_summary": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "content_preview": "先把桌面那个'数据'重命名为'今日数据'，然后把它压缩打包发给飞书助手",
+        "timestamp": 1704067200
+      }
+    },
+    {
+      "component": "DataValidator",
+      "status": "success",
+      "reason": "字段完整性与安全规则校验通过",
+      "output_summary": {
+        "channel_valid": true,
+        "user_id_valid": true,
+        "content_valid": true,
+        "timestamp_valid": true
+      }
+    },
+    {
+      "component": "EventNormalizer",
+      "status": "success",
+      "reason": "已转换为StandardEvent结构",
+      "output_summary": {
+        "standard_event_fields": [
+          "channel",
+          "user_id",
+          "content",
+          "timestamp",
+          "metadata"
+        ]
+      }
+    },
+    {
+      "component": "ErrorHandler",
+      "status": "skipped",
+      "reason": "当前请求处理成功，未触发重试或错误记录机制"
+    },
+    {
+      "component": "SessionManager",
+      "status": "skipped",
+      "reason": "本次处理未要求创建或复用会话映射"
+    }
+  ],
+  "error": null
+}

@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Component: TaskPlanner
+  Layer: L3 (Orchestration)
+  创建时间: 2026-04-27
+  用途: 定义L3任务规划器的详细规范
+  状态: 现有代码较完整，需强化PlanCompletenessRules
+-->
+<Component name="TaskPlanner" layer="L3" version="1.0">
+
+  <Description>
+    任务规划器，将复杂用户请求拆解为可执行步骤序列（TaskGraph）。
+    为ReActEngine提供结构化参考框架，但ReActEngine有权动态调整（不强制按步骤执行）。
+    使用轻量级LLM进行规划，降低Token消耗。
+  </Description>
+
+  <Responsibilities>
+    <Item priority="critical">将复杂请求拆解为有序的步骤列表</Item>
+    <Item priority="critical">确保计划覆盖到最终输出交付步骤（禁止以中间态终止）</Item>
+    <Item priority="high">管理步骤间的依赖关系（depends_on）</Item>
+    <Item priority="high">区分原子任务、复合任务、条件任务</Item>
+    <Item priority="medium">提供fallback机制，规划失败时返回单步计划</Item>
+  </Responsibilities>
+
+  <TaskTypes>
+    <Type name="atomic">
+      <Description>原子任务，可直接执行，无需进一步拆分</Description>
+      <Examples>单次文件读取、单次计算、单次搜索</Examples>
+    </Type>
+    <Type name="composite">
+      <Description>复合任务，需要拆分为多个子步骤</Description>
+      <Examples>先搜索再总结、先读取文件再分析再写入</Examples>
+    </Type>
+    <Type name="conditional">
+      <Description>条件任务，根据上一步结果决定后续分支</Description>
+      <Examples>若文件存在则读取，否则创建</Examples>
+    </Type>
+  </TaskTypes>
+
+  <PlanCompletenessRules>
+    <Rule priority="critical">生成的plan必须覆盖到最终输出交付步骤，禁止以中间态终止</Rule>
+    <Rule priority="critical">计划必须包含ToolCaller实际执行工具调用的步骤（如需要工具）</Rule>
+    <Rule priority="high">工具返回后必须有面向用户的完成确认步骤，复述关键结果字段</Rule>
+    <Rule priority="high">禁止以"已模拟""需要先获取数据"等中间态作为终态输出</Rule>
+    <Rule>步骤编号必须连续，depends_on必须引用已存在的步骤编号</Rule>
+  </PlanCompletenessRules>
+
+  <PlanSchema>
+    <Format>JSON array of step objects</Format>
+    <StepFields>
+      <Field name="step" type="int" required="true">步骤编号（从1开始）</Field>
+      <Field name="action" type="str" required="true">工具名称或"llm"</Field>
+      <Field name="description" type="str" required="true">步骤描述</Field>
+      <Field name="input" type="dict" required="true">步骤输入参数</Field>
+      <Field name="depends_on" type="List[int]" required="true">依赖的步骤编号列表</Field>
+    </StepFields>
+    <Example>
+      <![CDATA[
+[
+  {
+    "step": 1,
+    "action": "file_search",
+    "description": "搜索目标文件",
+    "input": {"keyword": "Q3财报"},
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "file_read",
+    "description": "读取文件内容",
+    "input": {"path": "{step1_result}"},
+    "depends_on": [1]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "生成摘要并向用户交付结果",
+    "input": {"task": "summarize", "content": "{step2_result}"},
+    "depends_on": [2]
+  }
+]
+      ]]>
+    </Example>
+  </PlanSchema>
+
+  <PlanningPromptTemplate>
+    <![CDATA[
+You are a task planner. Break down the following user request into a sequence of steps.
+Each step should use either a tool or LLM reasoning.
+
+User request: {query}
+Context: {context}
+Available tools: {tools_description}
+
+Output a JSON array of steps with this format:
+[
+    {
+        "step": 1,
+        "action": "tool_name or 'llm'",
+        "description": "what this step does",
+        "input": {"key": "value"},
+        "depends_on": []
+    }
+]
+
+Rules:
+- Use tools when specific capabilities are needed (calculator, web search, code execution, file operations)
+- Use 'llm' for reasoning, summarization, or when no tool fits
+- Number steps sequentially starting from 1
+- Use depends_on to indicate dependencies between steps
+- The LAST step must ALWAYS be delivering the result to the user (never stop at an intermediate data-gathering step)
+- If tools are needed, include actual tool execution steps, not just "plan to use tool"
+
+Output only valid JSON:
+    ]]>
+  </PlanningPromptTemplate>
+
+  <FallbackPlan>
+    <Trigger>LLM规划失败、返回无效JSON、或plan为空</Trigger>
+    <Action>返回单步fallback plan</Action>
+    <Schema>
+      <![CDATA[
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Process user request directly",
+    "input": {"query": "{original_query}"},
+    "depends_on": []
+  }
+]
+      ]]>
+    </Schema>
+  </FallbackPlan>
+
+  <Methods>
+    <Method name="create_plan">
+      <Signature>
+        <Input>
+          <Parameter name="query" type="str" required="true">用户请求</Parameter>
+          <Parameter name="context" type="str" required="false" default="">上下文信息</Parameter>
+          <Parameter name="available_tools" type="List[Dict]" required="false">可用工具列表</Parameter>
+        </Input>
+        <Output type="List[Dict]">
+          <Description>步骤列表，每个元素为步骤字典</Description>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 构建规划提示词（包含query、context、available_tools）</Step>
+        <Step>2. 调用LLMManager.complete(messages, temperature=0.2)</Step>
+        <Step>3. 从响应中提取JSON数组</Step>
+        <Step>4. 验证plan非空且符合schema</Step>
+        <Step>5. 若失败，返回fallback plan</Step>
+      </Implementation>
+    </Method>
+
+    <Method name="get_next_step">
+      <Signature>
+        <Input>
+          <Parameter name="plan" type="List[Dict]" required="true">完整计划</Parameter>
+          <Parameter name="completed_steps" type="List[int]" required="true">已完成步骤编号</Parameter>
+        </Input>
+        <Output type="Optional[Dict]">
+          <Description>下一个可执行的步骤，若无则返回None</Description>
+        </Output>
+      </Signature>
+      <Description>根据依赖关系计算下一个可执行步骤</Description>
+      <Algorithm>
+        遍历plan中的每个step，若step编号不在completed_steps中，
+        且step.depends_on中所有编号都在completed_steps中，则返回该step。
+        若无满足条件的step，返回None。
+      </Algorithm>
+    </Method>
+  </Methods>
+
+  <Integration>
+    <Upstream>
+      <From>L3.Orchestration.run()</From>
+      <Data>用户query、available_tools</Data>
+      <Note>仅在首次进入时创建plan，后续ReAct循环中作为参考</Note>
+    </Upstream>
+    <Downstream>
+      <To>L3.ReActEngine.generate_thought()</To>
+      <Data>plan_steps作为plan_hint参数</Data>
+      <Note>ReActEngine参考但不强制按plan执行</Note>
+    </Downstream>
+  </Integration>
+
+  <Testing>
+    <Requirement>任务规划测试可使用真实LLM验证plan质量</Requirement>
+    <TestCases>
+      <Case id="TC-TP-001">创建简单任务计划（单步）</Case>
+      <Case id="TC-TP-002">创建数学计算任务规划（调用calculator）</Case>
+      <Case id="TC-TP-003">创建文件操作任务规划（多步依赖）</Case>
+      <Case id="TC-TP-004">计划包含最终交付步骤（禁止中间态终止）</Case>
+      <Case id="TC-TP-005">依赖关系正确（step 2 depends_on [1]）</Case>
+      <Case id="TC-TP-006">Fallback plan在LLM失败时生效</Case>
+    </TestCases>
+  </Testing>
+
+  <ImplementationNotes>
+    <Note>现有代码位于 src/l3/l3_orchestration.py TaskPlanner 类</Note>
+    <Note>当前状态：create_plan() 和 get_next_step() 已实现</Note>
+    <Note>当前状态：planning_llm复用主llm_manager，未配置独立轻量模型</Note>
+    <Note>需强化：规划提示词中明确要求最终步骤必须是交付结果给用户</Note>
+    <Note>当前状态：TaskPlanner已实例化但未被Orchestration强制使用（仅作为ReActEngine参考）</Note>
+  </ImplementationNotes>
+
+</Component>

@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L2: 控制网关层 (Control Gateway)
+  创建时间: 2024
+  用途: 详细定义第二层的架构、接口、耦合和测试规范
+
+  组件级详细文档参见同目录下的组件 XML：
+  - L2_SessionManager.xml
+  - L2_RateLimiter.xml
+  - L2_ContextAssembler.xml
+  - L2_HistoryRetriever.xml
+  - L2_ToolPreparer.xml
+-->
+<Layer id="L2" name="ControlGateway" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>系统的控制网关，负责限流、会话管理、历史记录检索与上下文组装，将无状态的 StandardEvent 转为有状态的 SessionContext</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">会话管理（Session ID 生成、会话生命周期管理）</Item>
+      <Item priority="critical">限流控制（防止单个用户或 IP 的请求过载）</Item>
+      <Item priority="high">历史记录检索与拼接（将历史对话注入当前上下文）</Item>
+      <Item priority="high">上下文组装（将无状态 StandardEvent 转为有状态 SessionContext）</Item>
+      <Item priority="high">工具准备（从 L5 获取可用工具并按权限筛选）</Item>
+      <Item priority="medium">审计日志记录（记录所有经过网关的请求）</Item>
+    </Responsibilities>
+
+    <Components>
+      <Component name="SessionManager">
+        <Description>会话生命周期管理器（L2层），负责 session_id 的创建、获取、更新和过期管理。详见 L2_SessionManager.xml</Description>
+      </Component>
+
+      <Component name="RateLimiter">
+        <Description>三级限流器（滑动窗口计数器），防止请求过载。详见 L2_RateLimiter.xml</Description>
+      </Component>
+
+      <Component name="ContextAssembler">
+        <Description>上下文组装器，将 StandardEvent 转换为完整的 SessionContext。详见 L2_ContextAssembler.xml</Description>
+      </Component>
+
+      <Component name="HistoryRetriever">
+        <Description>历史记录检索器，从 L4 获取用户历史对话。详见 L2_HistoryRetriever.xml</Description>
+      </Component>
+
+      <Component name="ToolPreparer">
+        <Description>工具准备器，从 L5 获取可用工具列表并按权限筛选。详见 L2_ToolPreparer.xml</Description>
+      </Component>
+    </Components>
+
+    <DataFlow>
+      <Step order="1">接收 StandardEvent（来自 L1，含 metadata.session_id）</Step>
+      <Step order="2">RateLimiter 检查是否超过请求限制</Step>
+      <Step order="3">SessionManager 获取或创建会话（使用 metadata 中的 session_id）</Step>
+      <Step order="4">ContextAssembler 组装 SessionContext（委托 HistoryRetriever 获取历史记录）</Step>
+      <Step order="5">ToolPreparer 获取可用工具列表（ControlGateway 直接调用）</Step>
+      <Step order="6">MemoryAccessor 获取相关记忆片段（ControlGateway 直接调用）</Step>
+      <Step order="7">返回 L3Input 给上层调用方，由上层调用 L3 处理</Step>
+      <Step order="8">L3 处理完成后，上层将最终响应文本传回 L2.send_response()</Step>
+      <Step order="9">L2.send_response() 委托 L1.send_response() 发送给用户</Step>
+      <Step order="10">更新会话状态到 L4</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="process_event">
+      <Signature>process_event(event: StandardEvent) -&gt; L3Input</Signature>
+      <Description>处理 L1 输入事件，组装完整的 L3 输入上下文。包括限流检查、会话管理、上下文组装、工具准备与记忆检索</Description>
+      <Input>
+        <Parameter name="event" type="StandardEvent" required="true">
+          <Description>来自 L1 的标准化事件</Description>
+          <Fields>
+            <Field name="channel">渠道来源</Field>
+            <Field name="user_id">用户唯一标识</Field>
+            <Field name="content">当前查询内容</Field>
+            <Field name="timestamp">时间戳</Field>
+            <Field name="metadata">附加元数据（含 session_id, is_new_session_request, client_ip 等）</Field>
+          </Fields>
+        </Parameter>
+      </Input>
+
+      <Output type="L3Input">
+        <Field name="session_context" type="SessionContext" required="true">
+          <Description>完整的会话上下文（含 session_id, user_id, history, metadata）</Description>
+        </Field>
+        <Field name="available_tools" type="list[dict]" required="true">
+          <Description>L5 可用工具列表（全开放策略下包含所有工具）</Description>
+        </Field>
+        <Field name="relevant_memories" type="list[str]" required="false">
+          <Description>从 L4 检索的相关记忆片段</Description>
+        </Field>
+      </Output>
+
+      <Exceptions>
+        <Exception name="RateLimitExceeded">
+          <Description>请求频率超过限制</Description>
+          <ErrorCode>429</ErrorCode>
+          <RetryAfter>60秒</RetryAfter>
+        </Exception>
+        <Exception name="SessionError">
+          <Description>会话创建或检索失败</Description>
+          <ErrorCode>500</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </PrimaryMethod>
+
+    <SecondaryMethod name="send_response">
+      <Signature>send_response(event: StandardEvent, result: str) -&gt; bool</Signature>
+      <Description>将 L3 处理结果回传给 L1，由 L1 发送给用户。如有 l1_sender 则委托给 L1，否则降级为打印</Description>
+      <Input>
+        <Parameter name="event" type="StandardEvent" required="true">
+          <Description>原始 StandardEvent（用于获取 user_id 和渠道信息）</Description>
+        </Parameter>
+        <Parameter name="result" type="str" required="true">
+          <Description>L3 返回的最终响应文本</Description>
+        </Parameter>
+      </Input>
+
+      <Output type="bool">
+        <Description>发送是否成功</Description>
+      </Output>
+    </SecondaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Layer id="L1">用户接入层 (User Interaction)</Layer>
+      <Relation>被调用（接收 StandardEvent）</Relation>
+      <Method>L1 调用 L2.process_event(event: StandardEvent)</Method>
+      <DataFormat>StandardEvent 对象</DataFormat>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="L3">逻辑编排层 (Orchestration)</Layer>
+      <Relation>返回上下文供调用</Relation>
+      <Method>L2 返回 L3Input 给上层，上层调用 L3.run(context: SessionContext)</Method>
+      <DataFormat>L3Input 对象（含 SessionContext + available_tools + relevant_memories）</DataFormat>
+    </Downstream>
+
+    <ExternalDependencies>
+      <Layer id="L4">记忆与知识层 (Memory &amp; Knowledge)</Layer>
+      <Relation>调用（HistoryRetriever / MemoryAccessor）</Relation>
+      <Method>调用 L4.retrieve_history() 与 L4.search()</Method>
+      <Purpose>获取用户历史对话与相关记忆用于上下文组装</Purpose>
+    </ExternalDependencies>
+
+    <ExternalDependencies>
+      <Layer id="L5">能力抽象层 (Tools &amp; Capabilities)</Layer>
+      <Relation>调用（ToolPreparer）</Relation>
+      <Method>调用 L5.list_tools() 获取工具定义</Method>
+      <Purpose>获取可用工具列表供 L3 决策</Purpose>
+    </ExternalDependencies>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>models.StandardEvent - 输入数据结构</Dependency>
+        <Dependency>models.SessionContext - 输出数据结构</Dependency>
+        <Dependency>models.L3Input - 输出数据结构</Dependency>
+        <Dependency>interfaces.MemoryInterface - L4 接口抽象</Dependency>
+        <Dependency>interfaces.ToolsInterface - L5 接口抽象</Dependency>
+      </Internal>
+      <External>
+        <Dependency>redis - 会话存储（生产环境，可选）</Dependency>
+      </External>
+    </Dependencies>
+
+    <CouplingStrength>中等耦合</CouplingStrength>
+    <CouplingType>控制耦合（通过接口调用控制下层）+ 数据耦合</CouplingType>
+
+    <Note>
+      L2 是系统的控制网关，负责限流、会话管理和上下文组装。L2 不直接调用 L3 或 L5，仅组装 L3Input 返回给上层，由上层编排 L3-L5 循环。
+      L2 通过可选注入的 l1_sender 将 L3 结果回传给 L1 发送。通过依赖注入和接口抽象降低耦合度。
+    </Note>
+  </Coupling>
+
+</Layer>

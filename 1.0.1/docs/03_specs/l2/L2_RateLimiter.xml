@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L2 Component: RateLimiter
+  拆分自: L2_ControlGateway.xml
+  用途: 三级限流器，防止单个用户或 IP 的请求过载
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L2_ControlGateway.xml
+  src/l2/docs/L2_ControlGateway.xml
+-->
+<Component id="L2.RateLimiter" name="RateLimiter" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>三级限流器（滑动窗口计数器），防止请求过载。优先级：全局 &gt; IP &gt; 用户，任一级别超限即拒绝请求</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">用户级限流（按 user_id 统计，防止单个用户过载）</Item>
+      <Item priority="critical">IP 级限流（按客户端 IP 统计，防止单 IP 攻击）</Item>
+      <Item priority="critical">全局限流（全系统请求总量控制）</Item>
+      <Item priority="high">在 process_event 入口处拦截超限请求，返回限流标识供上层抛出 RateLimitExceeded</Item>
+    </Responsibilities>
+
+    <Algorithm>滑动窗口计数器（基于时间戳队列实现）</Algorithm>
+
+    <Limits>
+      <Limit scope="user">60 请求 / 60 秒</Limit>
+      <Limit scope="ip">100 请求 / 60 秒</Limit>
+      <Limit scope="global">1000 请求 / 1 秒</Limit>
+    </Limits>
+
+    <DataStructure>
+      <Field name="user_buckets" type="Dict[str, deque]">
+        <Description>用户级计数器窗口，key 为 user_id，value 为请求时间戳队列</Description>
+      </Field>
+      <Field name="ip_buckets" type="Dict[str, deque]">
+        <Description>IP 级计数器窗口，key 为 IP 地址，value 为请求时间戳队列</Description>
+      </Field>
+      <Field name="global_bucket" type="deque">
+        <Description>全局计数器窗口，无 key，仅一个时间戳队列</Description>
+      </Field>
+      <Field name="DEFAULT_LIMITS" type="Dict[str, tuple]">
+        <Description>默认限流配置：{级别: (最大请求数, 窗口秒数)}</Description>
+        <Example>{"user": (60, 60), "ip": (100, 60), "global": (1000, 1)}</Example>
+      </Field>
+      <Field name="limits" type="Dict[str, tuple]">
+        <Description>实例级限流配置，构造时传入。未提供则回退到 DEFAULT_LIMITS</Description>
+      </Field>
+    </DataStructure>
+
+    <DataFlow>
+      <Step order="1">process_event 调用 is_allowed(user_id, ip)</Step>
+      <Step order="2">获取当前时间戳 now = time.time()</Step>
+      <Step order="3">检查 global_bucket：清理过期时间戳，判断是否超限</Step>
+      <Step order="4" condition="提供 ip 参数">检查 ip_buckets[ip]：清理过期时间戳，判断是否超限</Step>
+      <Step order="5">检查 user_buckets[user_id]：清理过期时间戳，判断是否超限</Step>
+      <Step order="6" condition="任一级超限">返回 (False, 限流级别标识)</Step>
+      <Step order="7" condition="全部通过">将 now 加入各级桶，返回 (True, None)</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="is_allowed">
+      <Signature>is_allowed(user_id: str, ip: str = None) -&gt; tuple[bool, Optional[str]]</Signature>
+      <Description>检查请求是否允许通过。按全局 → IP → 用户顺序检查，任一级别超限即拒绝</Description>
+      <Input>
+        <Parameter name="user_id" type="str" required="true">
+          <Description>用户标识，用于用户级限流</Description>
+        </Parameter>
+        <Parameter name="ip" type="str" required="false">
+          <Description>可选的客户端 IP，用于 IP 级限流</Description>
+        </Parameter>
+      </Input>
+      <Output type="tuple[bool, Optional[str]]">
+        <Field name="is_allowed" type="bool">
+          <Description>True 表示请求可以继续，False 表示被限流</Description>
+        </Field>
+        <Field name="reason" type="Optional[str]">
+          <Description>被阻止时的限流级别标识（global_rate_limit / ip_rate_limit / user_rate_limit），允许时为 None</Description>
+        </Field>
+      </Output>
+    </PrimaryMethod>
+
+    <Method name="_check_bucket">
+      <Signature>_check_bucket(bucket: deque, level: str, now: float) -&gt; bool</Signature>
+      <Description>检查单个计数器窗口是否允许当前请求。清理过期时间戳后判断是否超限</Description>
+      <Input>
+        <Parameter name="bucket" type="deque" required="true">
+          <Description>该级别的请求时间戳队列</Description>
+        </Parameter>
+        <Parameter name="level" type="str" required="true">
+          <Description>限流级别（user / ip / global）</Description>
+        </Parameter>
+        <Parameter name="now" type="float" required="true">
+          <Description>当前时间戳</Description>
+        </Parameter>
+      </Input>
+      <Output type="bool">
+        <Description>True 表示请求被允许，False 表示被限流</Description>
+      </Output>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L2.ControlGateway">L2 主入口</Component>
+      <Relation>被调用方（process_event 中调用 is_allowed）</Relation>
+    </Upstream>
+
+    <Dependencies>
+      <External>
+        <Dependency>collections.deque - 计数器窗口时间戳队列</Dependency>
+        <Dependency>collections.defaultdict - 自动创建空窗口</Dependency>
+        <Dependency>time - 时间戳获取</Dependency>
+      </External>
+    </Dependencies>
+
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>数据耦合（仅接收 user_id 与 ip 字符串，返回 bool + reason）</CouplingType>
+
+    <Note>
+      RateLimiter 为纯内存实现，无外部依赖。重启后限流状态重置。
+      生产环境如需分布式限流，需替换为 Redis 等共享存储实现。
+    </Note>
+  </Coupling>
+
+</Component>

@@ -1,0 +1,15 @@
+{
+  "session_id": "test-cross-instance",
+  "messages": [
+    {
+      "role": "user",
+      "content": "跨实例测试"
+    },
+    {
+      "role": "assistant",
+      "content": "数据应该能被另一个实例读取"
+    }
+  ],
+  "updated_at": 1777370935.45784,
+  "message_count": 2
+}

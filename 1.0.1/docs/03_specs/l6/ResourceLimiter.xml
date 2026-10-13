@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L6 Component: ResourceLimiter
+  所属层级: L6 RuntimeEnvironment
+  创建时间: 2026-04-23
+  用途: 详细定义资源限制器的架构、配额策略、接口与测试规范
+-->
+<Component id="L6.ResourceLimiter" name="ResourceLimiter" version="1.0">
+
+  <!-- ==================== 1. 概述 ==================== -->
+  <Overview>
+    <Purpose>资源限制器负责管理代码执行的资源配额，防止恶意或错误代码耗尽宿主机的CPU、内存、磁盘和时间资源。</Purpose>
+    <Role>系统的资源预算管理员，在执行前设定配额，在执行后检查用量是否超限。</Role>
+    <LayerPosition>L6中间层，被RuntimeEnvironment在创建沙盒前调用，也被SecurityEnforcer在预检时引用</LayerPosition>
+  </Overview>
+
+  <!-- ==================== 2. 职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">配额定义：为每次执行设定CPU、内存、时间、磁盘、网络的可用上限</Item>
+    <Item priority="critical">预执行校验：在执行前验证请求的资源限制是否在系统允许范围内</Item>
+    <Item priority="high">用量检查：将实际资源使用量与配额对比，判定是否超限</Item>
+    <Item priority="high">默认值管理：提供安全的默认限制，防止未配置场景下的资源滥用</Item>
+    <Item priority="medium">动态调整：支持在执行前动态修改资源限制（如用户请求更高内存）</Item>
+    <Item priority="low">硬上限保护：无论用户请求什么，都不允许超过系统硬上限（如内存≤4GB）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 资源配额定义 ==================== -->
+  <ResourceQuotas>
+    <Quota type="cpu">
+      <Description>CPU核心数限制</Description>
+      <Default>1.0（1000 millicores）</Default>
+      <HardMax>4.0 cores</HardMax>
+      <Unit>cores</Unit>
+      <EnforcementMethod>cgroups cpu.cfs_quota_us（Docker模式）/ os.nice（Process模式）</EnforcementMethod>
+    </Quota>
+    <Quota type="memory">
+      <Description>内存使用上限</Description>
+      <Default>512 MB</Default>
+      <HardMax>4096 MB</HardMax>
+      <Unit>MB</Unit>
+      <EnforcementMethod>cgroups memory.limit_in_bytes（Docker模式）/ resource.setrlimit(RLIMIT_AS)（Process模式）</EnforcementMethod>
+    </Quota>
+    <Quota type="time">
+      <Description>执行时间上限</Description>
+      <Default>30 seconds</Default>
+      <HardMax>300 seconds</HardMax>
+      <Unit>seconds</Unit>
+      <EnforcementMethod>Docker exec timeout参数 / Python signal.SIGALRM或threading.Timer</EnforcementMethod>
+    </Quota>
+    <Quota type="disk">
+      <Description>磁盘使用上限（临时文件+输出）</Description>
+      <Default>100 MB</Default>
+      <HardMax>1024 MB</HardMax>
+      <Unit>MB</Unit>
+      <EnforcementMethod>临时目录大小监控 / Docker volume大小限制</EnforcementMethod>
+    </Quota>
+    <Quota type="network">
+      <Description>网络访问权限</Description>
+      <Default>false（完全禁用）</Default>
+      <ValidValues>true, false</ValidValues>
+      <EnforcementMethod>Docker network_mode=none / 防火墙规则</EnforcementMethod>
+    </Quota>
+  </ResourceQuotas>
+
+  <!-- ==================== 4. 接口规范 ==================== -->
+  <Interface>
+    <Method name="__init__">
+      <Signature>
+        <Input>
+          <Parameter name="limits" type="Dict[str, Any]" required="false">
+            <Description>初始资源限制字典。键包括：cpu, memory, time, disk, network</Description>
+            <Example><![CDATA[{"cpu": 1.0, "memory": 512, "time": 30, "disk": 100, "network": false}]]></Example>
+          </Parameter>
+        </Input>
+        <Output type="ResourceLimiter">ResourceLimiter实例</Output>
+      </Signature>
+      <Behavior>若limits为None，复制DEFAULT_LIMITS作为初始值</Behavior>
+    </Method>
+
+    <Method name="set">
+      <Signature>
+        <Input>
+          <Parameter name="**limits" type="kwargs" required="true">
+            <Description>要更新的资源限制。支持cpu、memory、time、disk、network等键</Description>
+            <Example>set(memory=1024, timeout=60)</Example>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>
+        <Step>1. 将传入的键值对更新到self.limits字典中</Step>
+        <Step>2. 不校验数值合法性（由check和SecurityEnforcer负责）</Step>
+      </Behavior>
+      <SideEffects>修改内部limits字典状态</SideEffects>
+    </Method>
+
+    <Method name="check">
+      <Signature>
+        <Input>
+          <Parameter name="usage" type="Dict[str, Any]" required="true">
+            <Description>当前资源使用量字典</Description>
+            <Example><![CDATA[{"memory": 600, "cpu": 1.2}]]></Example>
+          </Parameter>
+        </Input>
+        <Output type="bool">
+          <Description>true表示所有资源均未超限；false表示至少有一项超限</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 遍历self.limits中的每个限制项</Step>
+        <Step>2. 若usage中存在对应键，且usage值 &gt; limit值，返回False</Step>
+        <Step>3. 全部通过则返回True</Step>
+      </Behavior>
+      <Note>network配额不参与数值比较（network是布尔值）</Note>
+    </Method>
+
+    <Method name="get_limits">
+      <Signature>
+        <Input>无</Input>
+        <Output type="Dict[str, Any]">
+          <Description>当前所有资源限制的副本</Description>
+        </Output>
+      </Signature>
+      <Behavior>返回self.limits的浅拷贝，防止外部直接修改内部状态</Behavior>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">RuntimeEnvironment.run_code() 接收用户传入的environment_config</Step>
+    <Step order="2">RuntimeEnvironment 调用 SecurityEnforcer.check_resource_limits() 进行预检</Step>
+    <Step order="3">SecurityEnforcer 内部使用 ResourceLimiter.get_limits() 获取系统硬上限</Step>
+    <Step order="4">若预检通过，RuntimeEnvironment 将配置传递给 SandboxManager</Step>
+    <Step order="5">SandboxManager → DockerController.create_container() 时传入 mem_limit 和 cpu_quota</Step>
+    <Step order="6">DockerController 将资源限制转换为 Docker API 参数（--memory, --cpu-quota）</Step>
+    <Step order="7">容器运行期间，Docker Engine 通过 cgroups 强制执行资源限制</Step>
+    <Step order="8">执行完成后，DockerController 返回结果（未来可包含实际资源用量）</Step>
+  </DataFlow>
+
+  <!-- ==================== 6. 默认值与常量 ==================== -->
+  <Constants>
+    <Constant name="DEFAULT_LIMITS">
+      <Value><![CDATA[{"cpu": 1.0, "memory": 512, "time": 30, "disk": 100, "network": false}]]></Value>
+      <Description>默认资源限制，适用于大多数普通代码执行任务</Description>
+    </Constant>
+    <Constant name="HARD_LIMITS">
+      <Value><![CDATA[{"cpu": 4.0, "memory": 4096, "time": 300, "disk": 1024}]]></Value>
+      <Description>系统硬上限，任何用户请求都不能超过此限制</Description>
+    </Constant>
+  </Constants>
+
+  <!-- ==================== 7. 异常与错误处理 ==================== -->
+  <ErrorHandling>
+    <Scenario name="memory_over_hard_limit">
+      <Trigger>用户请求memory_limit &gt; 4096</Trigger>
+      <Action>SecurityEnforcer抛出SecurityViolationError</Action>
+    </Scenario>
+    <Scenario name="timeout_over_hard_limit">
+      <Trigger>用户请求timeout &gt; 300</Trigger>
+      <Action>SecurityEnforcer抛出SecurityViolationError</Action>
+    </Scenario>
+    <Scenario name="resource_exceeded_during_execution">
+      <Trigger>容器执行期间内存超过mem_limit</Trigger>
+      <Action>Docker OOM Killer终止容器，返回非0 exit_code。L6应包装为ResourceExceededError</Action>
+    </Scenario>
+  </ErrorHandling>
+
+  <!-- ==================== 8. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component>SecurityEnforcer</Component>
+      <Relation>SecurityEnforcer.check_resource_limits()读取ResourceLimiter的硬上限进行校验</Relation>
+    </Upstream>
+    <Upstream>
+      <Component>RuntimeEnvironment</Component>
+      <Relation>RuntimeEnvironment在run_code()中接收environment_config，可能调用ResourceLimiter.set()更新配置</Relation>
+    </Upstream>
+    <Downstream>
+      <Component>DockerController</Component>
+      <Relation>ResourceLimiter.get_limits()的结果被转换为Docker资源参数传入create_container()</Relation>
+    </Downstream>
+    <Dependencies>
+      <External>无外部依赖（纯Python字典操作）</External>
+    </Dependencies>
+  </Coupling>
+
+  <!-- ==================== 9. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="RL_001">
+      <Name>默认限制初始化</Name>
+      <Steps>
+        <Step>创建ResourceLimiter()，不传入limits</Step>
+        <Step>调用get_limits()</Step>
+      </Steps>
+      <Expected>返回{"cpu": 1.0, "memory": 512, "time": 30, "disk": 100, "network": false}</Expected>
+    </TestCase>
+    <TestCase id="RL_002">
+      <Name>动态更新限制</Name>
+      <Steps>
+        <Step>创建ResourceLimiter()</Step>
+        <Step>调用set(memory=1024, cpu=2.0)</Step>
+        <Step>调用get_limits()</Step>
+      </Steps>
+      <Expected>memory=1024, cpu=2.0，其他保持默认值</Expected>
+    </TestCase>
+    <TestCase id="RL_003">
+      <Name>用量未超限</Name>
+      <Steps>
+        <Step>ResourceLimiter默认配置</Step>
+        <Step>check({"memory": 400, "cpu": 0.8})</Step>
+      </Steps>
+      <Expected>返回True</Expected>
+    </TestCase>
+    <TestCase id="RL_004">
+      <Name>用量超限</Name>
+      <Steps>
+        <Step>ResourceLimiter默认配置</Step>
+        <Step>check({"memory": 600, "cpu": 0.5})</Step>
+      </Steps>
+      <Expected>返回False（内存600&gt;512）</Expected>
+    </TestCase>
+    <TestCase id="RL_005">
+      <Name>get_limits返回副本</Name>
+      <Steps>
+        <Step>limits = limiter.get_limits()</Step>
+        <Step>limits["memory"] = 9999</Step>
+        <Step>再次调用limiter.get_limits()</Step>
+      </Steps>
+      <Expected>第二次返回的memory仍为512，证明返回的是副本</Expected>
+    </TestCase>
+  </Testing>
+
+</Component>

@@ -1,0 +1,63 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:26:31.984926",
+  "execution_time": 5.077810287475586,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "b686c276-a6ad-4a61-9d4a-e9d385720cac",
+    "query": "停下来，不弄了",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "error",
+    "error_code": 400,
+    "error_message": "Invalid operation: retrieve_and_search is not supported. Supported operations are search, store, store_conversation, retrieve_history.",
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search",
+      "[2] 参数校验: 失败，操作类型不在规范定义范围内",
+      "[3] 终止处理: 未执行检索/存储流程"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "skipped",
+        "reason": "请求在操作类型校验阶段失败，未进入缓存检查。"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "未执行search流程，未生成Embedding。"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "未执行store流程，未进行文本分块。"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "由于操作无效，未进行向量检索或存储。"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "当前请求既非store_conversation也非retrieve_history，未触发记忆存取。"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "本次请求不涉及索引创建或删除。"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search",
+    "[2] 参数校验: 失败，操作类型不在规范定义范围内",
+    "[3] 终止处理: 未执行检索/存储流程"
+  ],
+  "error": null
+}

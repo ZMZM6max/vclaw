@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-08",
+  "test_name": "覆盖同名文件",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是捕获文件已存在的冲突并询问如何处理，而实际回复却表示已成功写入文件，没有体现冲突或让用户选择处理方式。",
+  "final_response": "已成功写入文件《备忘录.txt》，路径为 documents/备忘录.txt，内容是“买牛奶”。",
+  "execution_time": 34.19333243370056,
+  "layer_count": 6,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-08",
+  "timestamp": "2026-04-21T18:18:11.511688"
+}

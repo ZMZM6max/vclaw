@@ -1,0 +1,76 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:18:40.868758",
+  "execution_time": 4.86353063583374,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "369bbe7d-5398-445f-b554-c09d86afa4fa",
+    "query": "总结一下桌面上那个空文件《测试.docx》",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "results": [],
+    "query_embedding": [],
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收检索请求: query='总结一下桌面上那个空文件《测试.docx》'",
+      "[2] CacheManager检查: 未命中（无可用缓存）",
+      "[3] EmbeddingService: 由于当前请求为retrieve_and_search且未提供可检索索引数据，模拟生成查询向量失败并转入空结果返回",
+      "[4] VectorStore: 未执行有效相似度检索（输入数据中search_count=0且real_search_results为空）",
+      "[5] 返回top 0结果",
+      "[6] CacheManager: 缓存空结果"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已执行缓存检查",
+        "output_summary": "未命中缓存"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "当前输入为retrieve_and_search且未提供可实际生成/使用的向量检索数据，按空结果流程处理",
+        "output_summary": "未生成embedding"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "本次为检索请求，不涉及文档分块",
+        "output_summary": "未触发"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "未提供可检索向量库内容，且search_count为0",
+        "output_summary": "返回空检索结果"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "未请求对话历史存储或检索",
+        "output_summary": "未触发"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "本次请求不涉及索引创建、更新或删除",
+        "output_summary": "未触发"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收检索请求: query='总结一下桌面上那个空文件《测试.docx》'",
+    "[2] CacheManager检查: 未命中（无可用缓存）",
+    "[3] EmbeddingService: 由于当前请求为retrieve_and_search且未提供可检索索引数据，模拟生成查询向量失败并转入空结果返回",
+    "[4] VectorStore: 未执行有效相似度检索（输入数据中search_count=0且real_search_results为空）",
+    "[5] 返回top 0结果",
+    "[6] CacheManager: 缓存空结果"
+  ],
+  "error": null
+}

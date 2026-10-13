@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L1 Component: EventNormalizer
+  拆分自: L1_UserInteraction.xml
+  用途: 事件标准化器，将各种格式的原始数据转为 StandardEvent
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L1_UserInteraction.xml
+  src/l1/docs/L1_UserInteraction.xml
+-->
+<Component id="L1.EventNormalizer" name="EventNormalizer" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>事件标准化器，负责将各种外部协议格式的原始数据转换为系统内部统一的 StandardEvent 对象</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">维护已注册的 ProtocolAdapter 列表，覆盖所有支持的外部渠道</Item>
+      <Item priority="critical">根据显式 channel 参数或自动检测（can_handle）选择合适的适配器</Item>
+      <Item priority="high">调用适配器的 parse 方法完成数据转换</Item>
+      <Item priority="high">在无法匹配适配器时抛出 UnsupportedChannelError</Item>
+      <Item priority="medium">支持运行时注入自定义适配器列表（便于测试与扩展）</Item>
+    </Responsibilities>
+
+    <Adapters>
+      <Adapter name="TelegramAdapter" channel="telegram">处理 Telegram Bot API 消息</Adapter>
+      <Adapter name="WebSocketAdapter" channel="websocket">处理 WebSocket JSON 消息</Adapter>
+      <Adapter name="HttpWebhookAdapter" channel="webhook">处理 HTTP Webhook 回调</Adapter>
+    </Adapters>
+
+    <DataFlow>
+      <Step order="1">接收原始数据（raw_data: dict）与可选的渠道提示（channel: str）</Step>
+      <Step order="2" condition="channel 参数已提供">遍历适配器列表，匹配 adapter.get_channel_name() == channel，直接调用 parse</Step>
+      <Step order="3" condition="channel 参数未提供">遍历适配器列表，调用 adapter.can_handle(raw_data) 自动检测</Step>
+      <Step order="4">首个匹配成功的适配器执行 parse(raw_data)，返回 StandardEvent</Step>
+      <Step order="5" condition="无适配器匹配">抛出 UnsupportedChannelError</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="normalize">
+      <Signature>normalize(raw_data: Dict, channel: str = None) -&gt; StandardEvent</Signature>
+      <Description>将原始数据标准化为 StandardEvent。支持显式指定渠道或自动检测</Description>
+      <Input>
+        <Parameter name="raw_data" type="dict" required="true">
+          <Description>来自外部渠道的原始输入数据</Description>
+        </Parameter>
+        <Parameter name="channel" type="str" required="false">
+          <Description>可选的渠道类型提示。若提供则跳过自动检测，直接匹配对应适配器</Description>
+          <ValidValues>telegram, websocket, webhook</ValidValues>
+        </Parameter>
+      </Input>
+      <Output type="StandardEvent">
+        <Description>标准化的内部事件对象</Description>
+      </Output>
+      <Exceptions>
+        <Exception name="UnsupportedChannelError">
+          <Description>无适配器能够处理提供的数据格式，或指定的 channel 无对应适配器</Description>
+          <ErrorCode>400</ErrorCode>
+        </Exception>
+        <Exception name="ParseError">
+          <Description>适配器解析数据失败（由具体 ProtocolAdapter 抛出）</Description>
+          <ErrorCode>500</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </PrimaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L1.UserInteraction">L1 主入口</Component>
+      <Relation>被调用方（receive_payload 中调用 normalize）</Relation>
+      <DataFormat>原始 dict 数据 + 可选 channel 字符串</DataFormat>
+    </Upstream>
+
+    <Downstream>
+      <Component id="L1.ProtocolAdapter">协议适配器</Component>
+      <Relation>持有并调用各适配器的 can_handle / parse / get_channel_name 方法</Relation>
+      <DataFormat>StandardEvent 对象</DataFormat>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>models.StandardEvent - 标准化事件数据结构</Dependency>
+        <Dependency>L1.ProtocolAdapter 抽象基类及其实现</Dependency>
+        <Dependency>core.exceptions.UnsupportedChannelError - 不支持渠道异常</Dependency>
+        <Dependency>core.exceptions.ParseError - 解析异常</Dependency>
+      </Internal>
+    </Dependencies>
+
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>控制耦合 + 数据耦合（通过适配器列表聚合调用，输出 StandardEvent）</CouplingType>
+  </Coupling>
+
+</Component>

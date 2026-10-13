@@ -1,0 +1,23 @@
+{
+  "session_id": "test-session-001",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is Python?"
+    },
+    {
+      "role": "assistant",
+      "content": "Python is a programming language."
+    },
+    {
+      "role": "user",
+      "content": "Is it easy to learn?"
+    },
+    {
+      "role": "assistant",
+      "content": "Yes, Python is known for being beginner-friendly."
+    }
+  ],
+  "updated_at": 1775982696.915577,
+  "message_count": 4
+}

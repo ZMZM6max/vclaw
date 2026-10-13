@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-10",
+  "test_name": "虚构文件内容",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是明确回复“这个文档里面什么都没有写哦，是空的。”，而实际回复只是说明“内容为空，因此没有可供总结的内容”，语义接近但未按要求给出指定的空文档提示语。",
+  "final_response": "《测试.docx》内容为空，因此没有可供总结的内容。",
+  "execution_time": 37.3619863986969,
+  "layer_count": 6,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-10",
+  "timestamp": "2026-04-21T18:19:15.433830"
+}

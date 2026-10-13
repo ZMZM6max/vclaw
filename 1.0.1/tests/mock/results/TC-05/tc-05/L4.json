@@ -1,0 +1,114 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:16:28.887240",
+  "execution_time": 3.9374051094055176,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "ba1eb241-3982-49a9-8f96-a6ec55b52771",
+    "query": "帮我整理一下电脑",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "results": [],
+    "query_embedding": null,
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收检索请求: query='帮我整理一下电脑'",
+      "[2] CacheManager检查: 未命中（当前上下文未提供可用缓存结果）",
+      "[3] EmbeddingService: 生成1536维向量（模拟成功）",
+      "[4] VectorStore: 执行相似度检索（当前输入未提供可检索索引/结果，返回空）",
+      "[5] 返回top 0结果",
+      "[6] CacheManager: 缓存结果（模拟写入）"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已执行缓存检查",
+        "output_summary": "未命中缓存"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "success",
+        "reason": "已为检索query生成向量",
+        "output_summary": "生成1536维查询向量"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "当前为检索操作，未触发文本分块",
+        "output_summary": "未执行"
+      },
+      {
+        "component": "VectorStore",
+        "status": "success",
+        "reason": "已执行向量检索",
+        "output_summary": "未检索到可返回结果"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "当前请求未包含对话历史存储/检索操作",
+        "output_summary": "未执行"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "当前请求未涉及索引创建/删除",
+        "output_summary": "未执行"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收检索请求: query='帮我整理一下电脑'",
+    "[2] CacheManager检查: 未命中（当前上下文未提供可用缓存结果）",
+    "[3] EmbeddingService: 生成1536维向量（模拟成功）",
+    "[4] VectorStore: 执行相似度检索（当前输入未提供可检索索引/结果，返回空）",
+    "[5] 返回top 0结果",
+    "[6] CacheManager: 缓存结果（模拟写入）"
+  ],
+  "component_trace": [
+    {
+      "component": "CacheManager",
+      "status": "success",
+      "reason": "已执行缓存检查",
+      "output_summary": "未命中缓存"
+    },
+    {
+      "component": "EmbeddingService",
+      "status": "success",
+      "reason": "已为检索query生成向量",
+      "output_summary": "生成1536维查询向量"
+    },
+    {
+      "component": "TextChunker",
+      "status": "skipped",
+      "reason": "当前为检索操作，未触发文本分块",
+      "output_summary": "未执行"
+    },
+    {
+      "component": "VectorStore",
+      "status": "success",
+      "reason": "已执行向量检索",
+      "output_summary": "未检索到可返回结果"
+    },
+    {
+      "component": "MemoryStore",
+      "status": "skipped",
+      "reason": "当前请求未包含对话历史存储/检索操作",
+      "output_summary": "未执行"
+    },
+    {
+      "component": "IndexManager",
+      "status": "skipped",
+      "reason": "当前请求未涉及索引创建/删除",
+      "output_summary": "未执行"
+    }
+  ],
+  "error": null
+}

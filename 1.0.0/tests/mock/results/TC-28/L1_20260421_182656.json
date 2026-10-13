@@ -1,0 +1,87 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:26:51.168705",
+  "execution_time": 5.684484004974365,
+  "input_data": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "帮我建个文件，名字叫 <我的*日记?> "
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "success",
+    "standard_event": {
+      "channel": "telegram",
+      "user_id": "test_user_001",
+      "content": "帮我建个文件，名字叫 <我的*日记?> ",
+      "timestamp": 1704067200.0,
+      "metadata": {
+        "source": "telegram",
+        "message_id": 1,
+        "sanitized": true,
+        "client_ip": "192.168.1.1"
+      }
+    },
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: telegram",
+      "[2] ProtocolAdapter解析数据",
+      "[3] DataValidator验证字段完整性",
+      "[4] EventNormalizer转换为StandardEvent",
+      "[5] 验证通过，返回结果"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "success",
+        "reason": "已根据telegram渠道完成协议适配并提取原始消息字段",
+        "output_summary": "channel=telegram, message_id=1, user_id=test_user_001"
+      },
+      {
+        "component": "DataValidator",
+        "status": "success",
+        "reason": "字段完整性、渠道合法性与时间戳有效性均通过校验",
+        "output_summary": "user_id非空且长度合规, content非空, timestamp有效"
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "success",
+        "reason": "已将Telegram原始结构标准化为StandardEvent",
+        "output_summary": "standard_event已生成, metadata包含source与message_id"
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "skipped",
+        "reason": "本次处理未发生错误，因此未触发重试与错误记录",
+        "output_summary": "未执行重试"
+      },
+      {
+        "component": "SessionManager",
+        "status": "skipped",
+        "reason": "当前输入未要求会话创建或复用映射处理",
+        "output_summary": "未创建会话映射"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: telegram",
+    "[2] ProtocolAdapter解析数据",
+    "[3] DataValidator验证字段完整性",
+    "[4] EventNormalizer转换为StandardEvent",
+    "[5] 验证通过，返回结果"
+  ],
+  "error": null
+}

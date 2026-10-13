@@ -1,0 +1,344 @@
+# L3 文件路径处理测试结果
+
+## 桌面文件创建路径处理
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**: AgentAction(action="file_writer", action_input={"path": "documents/desktop/test.txt", "content": ""})
+
+**组件输出**: AgentAction(action="file_writer", action_input={"path": "documents/desktop/test.txt", "content": ""})
+
+状态: ✅ 通过 (正确转换路径)
+
+---
+
+## 下载文件夹路径处理
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**: AgentAction(action="file_reader", action_input={"path": "documents/downloads/report.pdf"})
+
+**组件输出**: AgentAction(action="file_reader", action_input={"path": "documents/downloads/report.pdf"})
+
+状态: ✅ 通过 (正确转换路径)
+
+---
+
+## 中文路径转换
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**: AgentAction(action="file_writer", action_input={"path": "documents/笔记.txt", "content": ""})
+
+**组件输出**: AgentAction(action="file_writer", action_input={"path": "documents/笔记.txt", "content": ""})
+
+状态: ✅ 通过 (正确转换路径)
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-13 20:20:23
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+{}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-14 16:03:38
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+{}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-14 16:03:54
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+{}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-14 16:04:05
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+{}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-22 17:13:25
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+action='terminal' action_input={'command': 'printf \'%s\n\' "$HOME"; ls -la "$HOME"; [ -d "$HOME/Desktop" ] && echo DESKTOP:$HOME/Desktop; [ -d "$HOME/桌面" ] && echo DESKTOP:$HOME/桌面', 'working_dir': ''} thought='Thought: 需要先确认当前环境里“桌面”的实际路径。根据计划第1步，应先获取桌面目录位置，再决定如何创建 test.txt。Action: terminal'
+
+**Action 信息**: Action: terminal, Input: {'command': 'printf \'%s\n\' "$HOME"; ls -la "$HOME"; [ -d "$HOME/Desktop" ] && echo DESKTOP:$HOME/Desktop; [ -d "$HOME/桌面" ] && echo DESKTOP:$HOME/桌面', 'working_dir': ''}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-22 17:13:50
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+action='file_search' action_input={'pattern': 'report.pdf', 'path': 'documents/下载'} thought='Thought: 需要先在下载文件夹中查找 report.pdf 的具体路径，符合计划的第 1 步；找到后再读取文件内容。  \nAction: file_search  \nAction Input: {"pattern":"report.pdf","path":"documents/下载"}'
+
+**Action 信息**: Action: file_search, Input: {'pattern': 'report.pdf', 'path': 'documents/下载'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-22 17:14:36
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+action='file_search' action_input={'pattern': '*note*', 'path': 'documents/'} thought='Thought: 需要先确认“文档文件夹”对应 documents/ 目录，并检查是否已有合适的笔记文件名，避免重复命名；因此下一步应先搜索 documents/ 目录中的笔记相关文件。  \nAction: file_search  \nAction Input: {"pattern":"*note*","path":"documents/"}'
+
+**Action 信息**: Action: file_search, Input: {'pattern': '*note*', 'path': 'documents/'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-27 19:25:39
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+I encountered an error: Failed after 3 attempts: OpenAI API error: OpenAI package not installed. Run: pip install openai
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-27 19:25:48
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+I encountered an error: Failed after 3 attempts: OpenAI API error: OpenAI package not installed. Run: pip install openai
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-27 19:25:58
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+I encountered an error: Failed after 3 attempts: OpenAI API error: OpenAI package not installed. Run: pip install openai
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-28 15:51:18
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+action='terminal' action_input={'command': 'echo $HOME && ls -d ~/Desktop ~/桌面 2>/dev/null'} thought='Thought: 需要先确认“桌面”在当前环境中的实际路径，然后再创建空的 test.txt 文件。根据计划，这一步应先进行路径确认，之后再执行创建文件。'
+
+**Action 信息**: Action: terminal, Input: {'command': 'echo $HOME && ls -d ~/Desktop ~/桌面 2>/dev/null'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-28 15:51:26
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+action='file_search' action_input={'directory': 'downloads/', 'keyword': 'report.pdf'} thought='Thought: 需要先定位下载文件夹中的 report.pdf 的实际路径。按照计划的第1步，应先用 file_search 搜索该文件，再决定是否能直接读取或需要提取文本。\n\nAction: functions.file_search\n\nAction Input: {"directory":"downloads/","keyword":"report.pdf"}'
+
+**Action 信息**: Action: file_search, Input: {'directory': 'downloads/', 'keyword': 'report.pdf'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-28 15:51:34
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+action='file_search' action_input={'directory': 'documents/', 'keyword': '笔记'} thought='Thought: 需要先确认文档文件夹中的现有笔记命名方式，避免重名并决定文件名，因此下一步应先搜索 documents/ 目录。'
+
+**Action 信息**: Action: file_search, Input: {'directory': 'documents/', 'keyword': '笔记'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-28 15:55:42
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+action='functions.terminal' action_input={'command': "python3 - <<'PY'\nimport os\nhome = os.path.expanduser('~')\nfor name in ['Desktop', '桌面']:\n    path = os.path.join(home, name)\n    print(f'{path}\\t{os.path.exists(path)}\\t{os.path.isdir(path)}')\nPY"} thought='需要先确认“桌面”在当前环境中的实际路径，可能是 ~/Desktop 或 ~/桌面。根据计划，先检查用户主目录下常见桌面目录是否存在，再创建空文件 test.txt。'
+
+**Action 信息**: Action: functions.terminal, Input: {'command': "python3 - <<'PY'\nimport os\nhome = os.path.expanduser('~')\nfor name in ['Desktop', '桌面']:\n    path = os.path.join(home, name)\n    print(f'{path}\\t{os.path.exists(path)}\\t{os.path.isdir(path)}')\nPY"}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-28 15:55:49
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+action='file_search' action_input={'directory': '下载', 'keyword': 'report.pdf'} thought='Thought: 先按计划第1步，在下载文件夹中搜索 report.pdf，确认准确路径；如果找到，再决定下一步如何读取 PDF。'
+
+**Action 信息**: Action: file_search, Input: {'directory': '下载', 'keyword': 'report.pdf'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-28 15:55:57
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+action='file_search' action_input={'keyword': '笔记', 'directory': 'documents/'} thought='Thought: 用户要在“文档”文件夹中新建一个笔记。按照计划，下一步是先确认文档目录里已有的笔记或相关文件，避免重名，并了解当前文件结构，所以我先进行文件搜索。'
+
+**Action 信息**: Action: file_search, Input: {'keyword': '笔记', 'directory': 'documents/'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-28 16:00:40
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+action='terminal' action_input={'command': 'set -e\nDESKTOP="$HOME/Desktop"\nmkdir -p "$DESKTOP"\ntouch "$DESKTOP/test.txt"\nls -l "$DESKTOP/test.txt"'} thought='Thought: 需要先确定桌面路径并创建文件。当前系统未提供桌面路径的明确结果，因此下一步应使用终端在常见桌面路径中创建 test.txt，优先尝试 $HOME/Desktop。'
+
+**Action 信息**: Action: terminal, Input: {'command': 'set -e\nDESKTOP="$HOME/Desktop"\nmkdir -p "$DESKTOP"\ntouch "$DESKTOP/test.txt"\nls -l "$DESKTOP/test.txt"'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-28 16:00:46
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+action='file_search' action_input={'directory': '下载文件夹', 'keyword': 'report.pdf'} thought='Using tool to complete the task'
+
+**Action 信息**: Action: file_search, Input: {'directory': '下载文件夹', 'keyword': 'report.pdf'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-28 16:00:52
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+action='file_search' action_input={'directory': 'documents/', 'keyword': '文档'} thought='Thought: 用户要在“文档”文件夹新建一个笔记。根据计划，下一步应先确认“文档”文件夹在系统中的实际位置，因此需要在默认 documents/ 目录下搜索相关文件夹或位置。  \nAction: file_search  \nAction Input: {"directory":"documents/","keyword":"文档"}'
+
+**Action 信息**: Action: file_search, Input: {'directory': 'documents/', 'keyword': '文档'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-28 16:07:16
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+action='terminal' action_input={'command': 'set -e\nDESKTOP="$HOME/Desktop"\nif [ ! -d "$DESKTOP" ]; then\n  DESKTOP="$HOME/桌面"\nfi\nmkdir -p "$DESKTOP"\ntouch "$DESKTOP/test.txt"\necho "$DESKTOP/test.txt"'} thought='Thought: 需要先确定桌面路径，然后创建空文件 test.txt。根据计划，现在进入第2步，使用终端在桌面目录创建该文件；若桌面路径不确定，可先尝试常见桌面路径。'
+
+**Action 信息**: Action: terminal, Input: {'command': 'set -e\nDESKTOP="$HOME/Desktop"\nif [ ! -d "$DESKTOP" ]; then\n  DESKTOP="$HOME/桌面"\nfi\nmkdir -p "$DESKTOP"\ntouch "$DESKTOP/test.txt"\necho "$DESKTOP/test.txt"'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-28 16:07:22
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+action='file_search' action_input={'directory': '下载', 'keyword': 'report.pdf'} thought='Thought: 先按计划第1步，在“下载”文件夹中搜索 report.pdf，确认具体路径；找到后再决定是否可以直接读取内容。'
+
+**Action 信息**: Action: file_search, Input: {'directory': '下载', 'keyword': 'report.pdf'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-28 16:07:29
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+action='file_search' action_input={'keyword': '笔记', 'directory': 'documents/'} thought='Thought: 需要先确认“文档文件夹”对应默认的 documents/ 目录，并检查是否已有同名笔记，以便后续安全创建。下一步应先搜索 documents/ 中可能的笔记文件名。'
+
+**Action 信息**: Action: file_search, Input: {'keyword': '笔记', 'directory': 'documents/'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 桌面文件创建
+**时间**: 2026-04-28 16:43:01
+**输入**: "在桌面创建一个文件 test.txt"
+
+**LLM 返回**:
+action='terminal' action_input={'command': 'mkdir -p "$HOME/Desktop" && touch "$HOME/Desktop/test.txt" && echo "created: $HOME/Desktop/test.txt"'} thought='Thought: 需要先确定桌面路径并创建空文件 test.txt。按照计划，下一步应执行终端命令在用户桌面目录下创建该文件。  \nAction: terminal  \nAction Input: {"command":"mkdir -p \\"$HOME/Desktop\\" && touch \\"$HOME/Desktop/test.txt\\" && echo \\"created: $HOME/Desktop/test.txt\\""}'
+
+**Action 信息**: Action: terminal, Input: {'command': 'mkdir -p "$HOME/Desktop" && touch "$HOME/Desktop/test.txt" && echo "created: $HOME/Desktop/test.txt"'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 下载文件夹访问
+**时间**: 2026-04-28 16:43:11
+**输入**: "读取下载文件夹中的 report.pdf"
+
+**LLM 返回**:
+action='file_search' action_input={'directory': 'downloads/', 'keyword': 'report.pdf'} thought='Using tool to complete the task'
+
+**Action 信息**: Action: file_search, Input: {'directory': 'downloads/', 'keyword': 'report.pdf'}
+
+**状态**: ✅ 通过
+
+---
+
+## 路径处理: 中文路径转换
+**时间**: 2026-04-28 16:43:17
+**输入**: "在文档文件夹新建一个笔记"
+
+**LLM 返回**:
+请告诉我笔记文件名，或者我可以按默认名称帮你创建（例如“新建笔记.txt”）。如果你有想写入的初始内容，也可以一起发给我。
+Thought: 用户只是要求“在文档文件夹新建一个笔记”，但还没有提供笔记文件名或内容；按计划第一步应先确认命名规则/是否接受默认命名。当前不需要直接创建文件。  
+Action: Final Answer  
+Action Input: 请告诉我笔记文件名，或者我可以按默认名称帮你创建（例如“新建笔记.txt”）。如果你有想写入的初始内容，也可以一起发给我。
+
+**状态**: ✅ 通过
+
+---

@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-07",
+  "test_name": "批量删除文件",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是直接给出下载夹中35个文件并询问是否全部清空，实际回复只是通用确认提示和风险警告，没有列出文件数量或前几个文件名，核心语义不一致。",
+  "final_response": "确定要清空“下载文件夹”里的所有内容吗？这个操作会删除大量文件，可能无法恢复。请回复“确认”继续，或回复“取消”终止。",
+  "execution_time": 22.454919815063477,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-07",
+  "timestamp": "2026-04-21T18:17:34.221859"
+}

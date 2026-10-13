@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L2 Component: ToolPreparer
+  拆分自: L2_ControlGateway.xml
+  用途: 工具准备器，从 L5 获取可用工具列表并按权限筛选
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L2_ControlGateway.xml
+  src/l2/docs/L2_ControlGateway.xml
+-->
+<Component id="L2.ToolPreparer" name="ToolPreparer" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>工具准备器，从 L5 工具池中获取可用工具定义，根据用户权限筛选后返回。当前策略为全开放：所有用户默认拥有全部工具权限</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">从 L5 工具池中获取全部可用工具定义</Item>
+      <Item priority="critical">根据 user_permissions 筛选用户有权限使用的工具</Item>
+      <Item priority="high">由调用方（ControlGateway）负责降级：L5 不可用时捕获异常并返回空列表</Item>
+      <Item priority="medium">保留权限筛选逻辑，后续如需限制权限只需修改 user_permissions 来源</Item>
+      <Item priority="medium">权限解析优先级：工具元数据 required_permission &gt; 本地 TOOL_PERMISSION_MAP &gt; 默认 None（无需权限）</Item>
+    </Responsibilities>
+
+    <Configuration>
+      <Field name="TOOL_PERMISSION_MAP" type="Dict[str, Optional[str]]">
+        <Description>工具名称到所需权限的映射。None 表示无需权限</Description>
+        <Entry tool="calculator" permission="None">始终可用</Entry>
+        <Entry tool="file_read" permission="file_read"></Entry>
+        <Entry tool="file_write" permission="file_write"></Entry>
+        <Entry tool="python_repl" permission="execute_code"></Entry>
+        <Entry tool="terminal" permission="execute_command"></Entry>
+        <Entry tool="search_web" permission="web_access"></Entry>
+      </Field>
+      <Field name="ALL_PERMISSIONS" type="List[str]">
+        <Description>全部权限列表（MVP 阶段所有用户默认拥有全部权限）</Description>
+        <Value>["file_read", "file_write", "execute_code", "execute_command", "web_access"]</Value>
+      </Field>
+    </Configuration>
+
+    <PermissionPolicy>
+      <Strategy>全开放</Strategy>
+      <DefaultPermissions>ALL_PERMISSIONS</DefaultPermissions>
+      <Note>MVP 阶段所有用户拥有全部工具权限，L2 不做权限拦截。后续如需限制权限，修改 process_event 中的 user_permissions 来源即可</Note>
+    </PermissionPolicy>
+
+    <DataFlow>
+      <Step order="1">ContextAssembler 或 ControlGateway 调用 prepare_tools(user_permissions)</Step>
+      <Step order="2">调用 tools.list_tools() 获取全部工具定义</Step>
+      <Step order="3">遍历每个工具，解析所需权限</Step>
+      <Step order="4">权限解析优先级：工具元数据 required_permission → 本地 TOOL_PERMISSION_MAP → None</Step>
+      <Step order="5">若 required_perm 为 None 或在 user_permissions 中，则加入可用列表</Step>
+      <Step order="6">返回筛选后的工具定义列表</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="prepare_tools">
+      <Signature>prepare_tools(user_permissions: List[str]) -&gt; List[Dict[str, Any]]</Signature>
+      <Description>根据用户权限筛选工具。全开放策略下传入 ALL_PERMISSIONS 即可返回全部工具</Description>
+      <Input>
+        <Parameter name="user_permissions" type="List[str]" required="true">
+          <Description>用户拥有的权限列表</Description>
+          <Example>["file_read", "file_write", "execute_code", "execute_command", "web_access"]</Example>
+        </Parameter>
+      </Input>
+      <Output type="List[Dict[str, Any]]">
+        <Description>用户有权限使用的工具定义列表。每个元素为包含 name、description、parameters 等字段的 dict</Description>
+      </Output>
+    </PrimaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L2.ControlGateway">L2 主入口</Component>
+      <Relation>process_event 直接调用 prepare_tools 获取可用工具</Relation>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="L5">能力抽象层</Layer>
+      <Relation>调用 L5.list_tools() 获取工具定义</Relation>
+      <DataFormat>工具定义字典列表</DataFormat>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>core.interfaces.ToolsInterface - L5 接口抽象</Dependency>
+      </Internal>
+    </Dependencies>
+
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>数据耦合（通过 ToolsInterface 调用，失败时降级为空列表）</CouplingType>
+
+    <Note>
+      ToolPreparer 只负责权限筛选，不定义工具本身。L5 为工具元数据的权威来源。
+      通过 ToolsInterface 与 L5 解耦，便于测试时注入 Mock。
+    </Note>
+  </Coupling>
+
+</Component>

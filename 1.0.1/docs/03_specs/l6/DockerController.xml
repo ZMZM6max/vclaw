@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L6 Component: DockerController
+  所属层级: L6 RuntimeEnvironment
+  创建时间: 2026-04-23
+  用途: 详细定义Docker控制器的架构、容器生命周期、资源约束与测试规范
+-->
+<Component id="L6.DockerController" name="DockerController" version="1.0">
+
+  <!-- ==================== 1. 概述 ==================== -->
+  <Overview>
+    <Purpose>Docker控制器是L6层的底层基础设施组件，负责直接操作Docker Engine API，完成容器的创建、启动、执行、停止和销毁。</Purpose>
+    <Role>Docker SDK for Python的包装器，向上层提供简化且安全的容器操作接口。</Role>
+    <LayerPosition>L6最底层，仅被SandboxManager调用，不直接暴露给RuntimeEnvironment</LayerPosition>
+  </Overview>
+
+  <!-- ==================== 2. 职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">容器创建：基于语言选择镜像，创建并启动容器</Item>
+    <Item priority="critical">命令执行：在运行中的容器内执行命令，捕获stdout/stderr/exit_code</Item>
+    <Item priority="critical">容器销毁：强制移除容器，释放资源</Item>
+    <Item priority="high">镜像管理：自动拉取缺失的镜像</Item>
+    <Item priority="high">资源约束：将CPU、内存、网络限制转换为Docker API参数</Item>
+    <Item priority="medium">懒加载：首次使用时才初始化docker客户端，减少启动开销</Item>
+    <Item priority="medium">输出截断：防止超大stdout/stderr耗尽内存</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 镜像映射 ==================== -->
+  <Images>
+    <Image language="python">
+      <Name>python:3.11-alpine</Name>
+      <Size>约55MB</Size>
+      <Base>Alpine Linux 3.18+</Base>
+      <Notes>包含Python 3.11标准库，无pip安装的第三方包</Notes>
+    </Image>
+    <Image language="javascript">
+      <Name>node:18-alpine</Name>
+      <Size>约180MB</Size>
+      <Base>Alpine Linux 3.18+</Base>
+      <Notes>包含Node.js 18 LTS，支持ES2022</Notes>
+    </Image>
+    <Image language="bash">
+      <Name>alpine:latest</Name>
+      <Size>约7MB</Size>
+      <Base>Alpine Linux</Base>
+      <Notes>最小化镜像，包含ash shell和基础Unix工具</Notes>
+    </Image>
+  </Images>
+
+  <!-- ==================== 4. 接口规范 ==================== -->
+  <Interface>
+    <Method name="__init__">
+      <Signature>
+        <Input>无</Input>
+        <Output type="DockerController">DockerController实例</Output>
+      </Signature>
+      <Behavior>_client初始化为None，采用懒加载策略</Behavior>
+    </Method>
+
+    <Method name="_get_client">
+      <Signature>
+        <Input>无</Input>
+        <Output type="docker.DockerClient">初始化的Docker客户端</Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 若_client已存在，直接返回</Step>
+        <Step>2. 尝试import docker</Step>
+        <Step>3. 调用docker.from_env()初始化</Step>
+        <Step>4. 若docker未安装，抛出SandboxCreationError（提示pip install docker）</Step>
+        <Step>5. 若Docker守护进程未运行，抛出SandboxCreationError</Step>
+      </Behavior>
+      <AccessModifier>private（以下划线开头）</AccessModifier>
+    </Method>
+
+    <Method name="create_container">
+      <Signature>
+        <Input>
+          <Parameter name="language" type="str" required="true">
+            <Description>编程语言，用于选择Docker镜像</Description>
+            <ValidValues>python, javascript, bash</ValidValues>
+          </Parameter>
+          <Parameter name="volumes" type="Dict[str, Dict]" required="true">
+            <Description>卷挂载映射。格式：{host_path: {"bind": container_path, "mode": "ro"}}</Description>
+            <Example><![CDATA[{"/tmp/vclaw_sandbox/env_123": {"bind": "/sandbox", "mode": "ro"}}]]></Example>
+          </Parameter>
+          <Parameter name="mem_limit" type="str" required="false" default="512m">
+            <Description>内存限制，Docker格式字符串（如"512m", "1g"）</Description>
+          </Parameter>
+          <Parameter name="cpu_quota" type="int" required="false" default="100000">
+            <Description>CPU配额（微秒）。100000 = 1核，200000 = 2核</Description>
+          </Parameter>
+          <Parameter name="network_mode" type="str" required="false" default="none">
+            <Description>网络模式。"none"完全隔离，"bridge"允许出站网络</Description>
+            <ValidValues>none, bridge</ValidValues>
+          </Parameter>
+        </Input>
+        <Output type="str">容器ID字符串</Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 调用_get_client()获取Docker客户端</Step>
+        <Step>2. 根据language从IMAGES映射获取镜像名</Step>
+        <Step>3. 检查镜像是否存在，不存在则自动拉取（client.images.pull）</Step>
+        <Step>4. 创建容器：command=["sleep", "3600"]保持容器存活</Step>
+        <Step>5. 设置volumes、mem_limit、cpu_quota、network_mode、read_only=True</Step>
+        <Step>6. 启动容器（container.start()）</Step>
+        <Step>7. 返回container.id</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="SandboxCreationError">镜像拉取失败、容器创建失败、Docker未安装或未运行</Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="exec_in_container">
+      <Signature>
+        <Input>
+          <Parameter name="container_id" type="str" required="true">
+            <Description>容器ID</Description>
+          </Parameter>
+          <Parameter name="command" type="List[str]" required="true">
+            <Description>命令及参数列表（非shell字符串）</Description>
+            <Example>["python", "/sandbox/script.py"]</Example>
+          </Parameter>
+          <Parameter name="timeout" type="int" required="false" default="30">
+            <Description>超时时间（秒）。注意：此timeout为Python层面的等待超时，非Docker内置超时</Description>
+          </Parameter>
+        </Input>
+        <Output type="Tuple[int, str, str]">
+          <Field name="exit_code" type="int">命令退出码</Field>
+          <Field name="stdout" type="str">标准输出（已解码为UTF-8）</Field>
+          <Field name="stderr" type="str">标准错误（当前实现中exec_run合并了stdout和stderr，此字段常为空字符串）</Field>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 通过client.containers.get(container_id)获取容器对象</Step>
+        <Step>2. 调用container.exec_run(cmd=command, stdout=True, stderr=True, stdin=False, tty=False)</Step>
+        <Step>3. 将result.output解码为UTF-8（errors='replace'）</Step>
+        <Step>4. 若输出超过10000字符，截断并追加提示</Step>
+        <Step>5. 返回(result.exit_code, stdout, "")</Step>
+      </Behavior>
+      <Note>docker-py的exec_run默认将stdout和stderr合并到output中，因此stderr常为空。如需分离，需使用stream=True和socket手动处理</Note>
+      <Exceptions>
+        <Exception name="Exception">容器不存在或执行失败时，返回(1, "", str(e))而非抛出</Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="remove_container">
+      <Signature>
+        <Input>
+          <Parameter name="container_id" type="str" required="true">
+            <Description>要移除的容器ID</Description>
+          </Parameter>
+          <Parameter name="force" type="bool" required="false" default="true">
+            <Description>是否强制移除运行中的容器</Description>
+          </Parameter>
+        </Input>
+        <Output type="bool">true表示成功移除，false表示失败</Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 获取容器对象</Step>
+        <Step>2. 调用container.remove(force=force)</Step>
+        <Step>3. 成功返回True，任何异常返回False</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="is_container_running">
+      <Signature>
+        <Input>
+          <Parameter name="container_id" type="str" required="true">
+            <Description>容器ID</Description>
+          </Parameter>
+        </Input>
+        <Output type="bool">true表示正在运行，false表示已停止或不存在</Output>
+      </Signature>
+      <Behavior>获取容器并检查container.status == "running"</Behavior>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 资源约束转换 ==================== -->
+  <ResourceMapping>
+    <Mapping from="cpu_quota" to="Docker">
+      <Description>CPU配额转换为Docker cpu_quota参数</Description>
+      <Formula>cpu_quota = cpu_cores * 100000</Formula>
+      <Example>1核 → 100000, 2核 → 200000</Example>
+    </Mapping>
+    <Mapping from="mem_limit" to="Docker">
+      <Description>内存限制转换为Docker mem_limit参数</Description>
+      <Formula>直接传入字符串，如"512m"</Formula>
+    </Mapping>
+    <Mapping from="network" to="Docker">
+      <Description>网络权限转换为Docker network_mode</Description>
+      <MappingTable>
+        <Row><Source>false</Source><Target>"none"</Target></Row>
+        <Row><Source>true</Source><Target>"bridge"</Target></Row>
+      </MappingTable>
+    </Mapping>
+    <Mapping from="read_only" to="Docker">
+      <Description>文件系统只读</Description>
+      <Target>read_only=True（容器根文件系统只读）</Target>
+      <Note>临时脚本通过volumes以ro模式挂载到/sandbox</Note>
+    </Mapping>
+  </ResourceMapping>
+
+  <!-- ==================== 6. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">SandboxManager.execute() 调用 create_container()</Step>
+    <Step order="2">DockerController 懒加载 docker client</Step>
+    <Step order="3">检查镜像存在性，缺失则 pull</Step>
+    <Step order="4">调用 client.containers.create() 创建容器</Step>
+    <Step order="5">调用 container.start() 启动容器</Step>
+    <Step order="6">返回 container_id 给 SandboxManager</Step>
+    <Step order="7">SandboxManager 调用 exec_in_container(container_id, command, timeout)</Step>
+    <Step order="8">DockerController 通过 exec_run 在容器内执行命令</Step>
+    <Step order="9">捕获输出，截断超长内容，返回 (exit_code, stdout, stderr)</Step>
+    <Step order="10">SandboxManager 调用 remove_container(container_id, force=True)</Step>
+    <Step order="11">DockerController 强制删除容器</Step>
+  </DataFlow>
+
+  <!-- ==================== 7. 异常与错误处理 ==================== -->
+  <ErrorHandling>
+    <Scenario name="docker_not_installed">
+      <Trigger>系统中未安装docker Python包</Trigger>
+      <Action>_get_client()抛出SandboxCreationError，提示"Docker SDK not installed. Run: pip install docker"</Action>
+    </Scenario>
+    <Scenario name="docker_daemon_down">
+      <Trigger>Docker守护进程未运行</Trigger>
+      <Action>_get_client()抛出SandboxCreationError，消息包含原始异常信息</Action>
+    </Scenario>
+    <Scenario name="image_pull_failed">
+      <Trigger>网络不可用或镜像仓库不可达，导致pull失败</Trigger>
+      <Action>create_container()抛出SandboxCreationError</Action>
+    </Scenario>
+    <Scenario name="container_not_found">
+      <Trigger>exec_in_container或remove_container传入不存在的container_id</Trigger>
+      <Action>exec_in_container返回(1, "", str(e))；remove_container返回False</Action>
+    </Scenario>
+    <Scenario name="exec_output_too_large">
+      <Trigger>容器内程序输出超过10000字符</Trigger>
+      <Action>截断输出至9970字符，追加"\n[Output truncated...]"</Action>
+    </Scenario>
+  </ErrorHandling>
+
+  <!-- ==================== 8. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component>SandboxManager</Component>
+      <Relation>SandboxManager是唯一调用方，负责传递语言、代码路径和资源限制</Relation>
+    </Upstream>
+    <Downstream>
+      <Component>Docker Engine</Component>
+      <Relation>通过docker-py库调用本地Docker守护进程的REST API</Relation>
+    </Downstream>
+    <Dependencies>
+      <External>docker (&gt;=7.0.0) - Docker SDK for Python</External>
+      <External>Docker Engine - 本地或远程Docker守护进程</External>
+      <Internal>core.exceptions.SandboxCreationError</Internal>
+    </Dependencies>
+  </Coupling>
+
+  <!-- ==================== 9. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="DC_001">
+      <Name>懒加载Docker客户端</Name>
+      <Steps>
+        <Step>创建DockerController()</Step>
+        <Step>检查_controller._client</Step>
+      </Steps>
+      <Expected>初始为None，首次调用_get_client()后才被赋值</Expected>
+    </TestCase>
+    <TestCase id="DC_002">
+      <Name>创建并执行容器</Name>
+      <Steps>
+        <Step>container_id = create_container("python", volumes, "512m", 100000, "none")</Step>
+        <Step>exit_code, stdout, stderr = exec_in_container(container_id, ["python", "-c", "print(1)"])</Step>
+        <Step>remove_container(container_id)</Step>
+      </Steps>
+      <Expected>exit_code=0, stdout="1\n", 容器被成功删除</Expected>
+    </TestCase>
+    <TestCase id="DC_003">
+      <Name>输出截断</Name>
+      <Steps>
+        <Step>执行输出大量文本的命令</Step>
+      </Steps>
+      <Expected>返回的stdout长度不超过10000，末尾包含"[Output truncated...]"</Expected>
+    </TestCase>
+    <TestCase id="DC_004">
+      <Name>移除不存在的容器</Name>
+      <Steps>
+        <Step>remove_container("nonexistent123", force=True)</Step>
+      </Steps>
+      <Expected>返回False，不抛出异常</Expected>
+    </TestCase>
+    <TestCase id="DC_005">
+      <Name>容器运行状态检查</Name>
+      <Steps>
+        <Step>创建容器后不执行命令，调用is_container_running()</Step>
+      </Steps>
+      <Expected>返回True（容器因sleep 3600保持运行）</Expected>
+    </TestCase>
+  </Testing>
+
+</Component>

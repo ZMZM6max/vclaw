@@ -1,0 +1,108 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:14:54.711813",
+  "execution_time": 4.494753837585449,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "ce406707-31e3-48d9-a54a-73ae8f632468",
+    "query": "帮我看看D盘那个《Q3财报.pdf》里面重点说了啥？",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "error",
+    "error_code": 400,
+    "error_type": "InvalidOperationError",
+    "message": "不支持的operation: retrieve_and_search。当前规范仅支持 search、store、store_conversation、retrieve_history。",
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search",
+      "[2] 校验操作类型: 未通过",
+      "[3] 终止处理: operation不在允许列表中"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "skipped",
+        "reason": "请求在操作类型校验阶段失败，未进入缓存检查。",
+        "output_summary": "未执行缓存查询"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "非search请求且操作无效，未触发Embedding生成。",
+        "output_summary": "未生成向量"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "非store请求，未触发文本分块。",
+        "output_summary": "未分块"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "请求未通过操作校验，未执行向量检索/存储。",
+        "output_summary": "未访问向量库"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "请求不是store_conversation或retrieve_history，未触发记忆存取。",
+        "output_summary": "未访问历史记忆"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "请求不涉及索引创建或删除。",
+        "output_summary": "未执行索引管理"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search",
+    "[2] 校验操作类型: 未通过",
+    "[3] 终止处理: operation不在允许列表中"
+  ],
+  "component_trace": [
+    {
+      "component": "CacheManager",
+      "status": "skipped",
+      "reason": "请求在操作类型校验阶段失败，未进入缓存检查。",
+      "output_summary": "未执行缓存查询"
+    },
+    {
+      "component": "EmbeddingService",
+      "status": "skipped",
+      "reason": "非search请求且操作无效，未触发Embedding生成。",
+      "output_summary": "未生成向量"
+    },
+    {
+      "component": "TextChunker",
+      "status": "skipped",
+      "reason": "非store请求，未触发文本分块。",
+      "output_summary": "未分块"
+    },
+    {
+      "component": "VectorStore",
+      "status": "skipped",
+      "reason": "请求未通过操作校验，未执行向量检索/存储。",
+      "output_summary": "未访问向量库"
+    },
+    {
+      "component": "MemoryStore",
+      "status": "skipped",
+      "reason": "请求不是store_conversation或retrieve_history，未触发记忆存取。",
+      "output_summary": "未访问历史记忆"
+    },
+    {
+      "component": "IndexManager",
+      "status": "skipped",
+      "reason": "请求不涉及索引创建或删除。",
+      "output_summary": "未执行索引管理"
+    }
+  ],
+  "error": null
+}

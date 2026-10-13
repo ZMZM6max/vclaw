@@ -1,0 +1,496 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L5 Component: PermissionManager
+  所属层: L5 - 能力抽象层 (Tools &amp; Capabilities)
+  创建时间: 2024
+  用途: 详细定义权限管理器组件的架构、权限模型、规则匹配与访问控制机制
+-->
+<ComponentSpec id="L5-PERMISSION-MANAGER" name="PermissionManager" layer="L5" version="1.0">
+
+  <!-- ==================== 1. 基本信息 ==================== -->
+  <Overview>
+    <Description>权限管理器，管理用户对工具的访问权限。支持基于允许列表（Allowlist）和拒绝列表（Denylist）的权限模型，提供通配符匹配、动态规则更新和权限审计能力。PermissionManager是L5层访问控制的核心组件，在工具执行前拦截未授权访问。</Description>
+    <Role>L5层访问控制守卫</Role>
+    <Responsibility>定义权限模式、支持通配符匹配、判断执行权限、标记需二次确认操作</Responsibility>
+  </Overview>
+
+  <!-- ==================== 2. 核心职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">定义用户权限模式（允许列表/拒绝列表）</Item>
+    <Item priority="critical">判断用户是否有权执行特定工具</Item>
+    <Item priority="high">支持通配符匹配规则（批量授权/拒绝）</Item>
+    <Item priority="high">标记需二次确认的操作（与ConfirmationManager协作）</Item>
+    <Item priority="medium">动态规则管理（运行时增删权限规则）</Item>
+    <Item priority="medium">权限审计日志（记录权限检查事件）</Item>
+    <Item priority="low">默认权限策略（新用户的默认权限集）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 数据结构 ==================== -->
+  <DataStructures>
+    <Structure name="PermissionResult">
+      <Description>权限检查结果</Description>
+      <Fields>
+        <Field name="allowed" type="bool" required="true">
+          <Description>是否允许执行</Description>
+        </Field>
+        <Field name="requires_confirmation" type="bool" required="false" default="false">
+          <Description>是否需要二次确认（允许执行但需用户确认）</Description>
+        </Field>
+        <Field name="reason" type="Optional[str]" required="false">
+          <Description>拒绝原因（allowed=false时）</Description>
+          <Example>您没有权限使用终端命令</Example>
+        </Field>
+        <Field name="matched_rule" type="Optional[str]" required="false">
+          <Description>匹配到的规则ID（用于审计）</Description>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="PermissionRule">
+      <Description>权限规则定义</Description>
+      <Fields>
+        <Field name="id" type="str" required="true">
+          <Description>规则唯一标识</Description>
+        </Field>
+        <Field name="user_pattern" type="str" required="true">
+          <Description>用户匹配模式（用户ID或通配符）</Description>
+          <Example>user_123, admin_*, *</Example>
+        </Field>
+        <Field name="tool_pattern" type="str" required="true">
+          <Description>工具匹配模式（工具名或通配符）</Description>
+          <Example>file_*, terminal, *</Example>
+        </Field>
+        <Field name="action" type="str" required="true">
+          <Description>规则动作</Description>
+          <ValidValues>allow, deny, confirm</ValidValues>
+          <Note>confirm表示允许但需二次确认</Note>
+        </Field>
+        <Field name="priority" type="int" required="false" default="0">
+          <Description>规则优先级（数字越大优先级越高）</Description>
+        </Field>
+        <Field name="description" type="Optional[str]" required="false">
+          <Description>规则描述（用于审计和管理）</Description>
+        </Field>
+        <Field name="created_at" type="float" required="false">
+          <Description>规则创建时间戳</Description>
+        </Field>
+        <Field name="expires_at" type="Optional[float]" required="false">
+          <Description>规则过期时间（None表示永不过期）</Description>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="UserPermissions">
+      <Description>用户权限集合</Description>
+      <Fields>
+        <Field name="user_id" type="str" required="true"/>
+        <Field name="mode" type="str" required="true">
+          <Description>权限模式</Description>
+          <ValidValues>allowlist, denylist</ValidValues>
+        </Field>
+        <Field name="rules" type="List[PermissionRule]" required="true">
+          <Description>该用户的权限规则列表</Description>
+        </Field>
+        <Field name="default_action" type="str" required="false" default="deny">
+          <Description>无规则匹配时的默认动作</Description>
+          <ValidValues>allow, deny, confirm</ValidValues>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="PermissionAuditLog">
+      <Description>权限审计日志条目</Description>
+      <Fields>
+        <Field name="timestamp" type="float" required="true"/>
+        <Field name="user_id" type="str" required="true"/>
+        <Field name="tool_name" type="str" required="true"/>
+        <Field name="result" type="str" required="true">
+          <ValidValues>allowed, denied, confirmed</ValidValues>
+        </Field>
+        <Field name="rule_id" type="Optional[str]" required="false"/>
+        <Field name="reason" type="Optional[str]" required="false"/>
+      </Fields>
+    </Structure>
+  </DataStructures>
+
+  <!-- ==================== 4. 接口定义 ==================== -->
+  <Interface>
+    <Method name="check_permission" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="user_id" type="str" required="true">
+            <Description>用户唯一标识</Description>
+          </Parameter>
+          <Parameter name="tool_name" type="str" required="true">
+            <Description>工具名称</Description>
+          </Parameter>
+          <Parameter name="action_params" type="Optional[dict]" required="false">
+            <Description>操作参数（用于细粒度权限判断，如文件路径）</Description>
+          </Parameter>
+        </Input>
+        <Output type="PermissionResult">
+          <Description>权限检查结果</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step order="1">获取用户权限配置（UserPermissions）</Step>
+        <Step order="2">按优先级排序规则（高优先级优先）</Step>
+        <Step order="3">遍历规则，使用match_rule检查每条规则是否匹配</Step>
+        <Step order="4">返回第一个匹配规则对应的PermissionResult</Step>
+        <Step order="5">若无规则匹配，返回默认动作（UserPermissions.default_action）</Step>
+        <Step order="6">记录审计日志</Step>
+      </Behavior>
+      <MatchingLogic>
+        <Step>1. 将user_pattern与user_id进行通配符匹配</Step>
+        <Step>2. 将tool_pattern与tool_name进行通配符匹配</Step>
+        <Step>3. 检查规则是否过期（expires_at &lt; now）</Step>
+        <Step>4. 两个模式均匹配且未过期，则规则命中</Step>
+      </MatchingLogic>
+    </Method>
+
+    <Method name="match_rule" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="user_id" type="str" required="true"/>
+          <Parameter name="tool_name" type="str" required="true"/>
+          <Parameter name="rule" type="PermissionRule" required="true"/>
+        </Input>
+        <Output type="bool">
+          <Description>规则是否匹配</Description>
+        </Output>
+      </Signature>
+      <Description>检查单条规则是否匹配用户和工具</Description>
+      <WildcardRules>
+        <Rule>* 匹配任意字符串（包括空字符串）</Rule>
+        <Rule>? 匹配单个字符</Rule>
+        <Rule>[abc] 匹配方括号内任意字符</Rule>
+        <Rule>支持前缀匹配（如file_*匹配file_read、file_write）</Rule>
+      </WildcardRules>
+    </Method>
+
+    <Method name="add_rule" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="rule" type="PermissionRule" required="true">
+            <Description>权限规则对象</Description>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>
+        <Step>1. 校验rule格式</Step>
+        <Step>2. 生成rule.id（若未提供）</Step>
+        <Step>3. 将规则加入对应用户的规则列表</Step>
+        <Step>4. 重新排序（按优先级降序）</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="remove_rule" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="rule_id" type="str" required="true"/>
+        </Input>
+        <Output type="bool">
+          <Description>是否成功移除</Description>
+        </Output>
+      </Signature>
+    </Method>
+
+    <Method name="set_user_permissions" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="user_id" type="str" required="true"/>
+          <Parameter name="permissions" type="UserPermissions" required="true"/>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Description>设置用户完整权限配置</Description>
+    </Method>
+
+    <Method name="get_user_permissions" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="user_id" type="str" required="true"/>
+        </Input>
+        <Output type="UserPermissions">
+          <Description>用户权限配置（不存在返回默认配置）</Description>
+        </Output>
+      </Signature>
+    </Method>
+
+    <Method name="get_audit_logs" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="user_id" type="Optional[str]" required="false"/>
+          <Parameter name="start_time" type="Optional[float]" required="false"/>
+          <Parameter name="end_time" type="Optional[float]" required="false"/>
+          <Parameter name="limit" type="int" required="false" default="100"/>
+        </Input>
+        <Output type="List[PermissionAuditLog]"/>
+      </Signature>
+      <Description>查询权限审计日志</Description>
+    </Method>
+
+    <Method name="apply_default_policy" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="user_id" type="str" required="true">
+            <Description>用户唯一标识</Description>
+          </Parameter>
+          <Parameter name="policy_name" type="str" required="true">
+            <Description>策略名称</Description>
+            <ValidValues>anonymous_user, standard_user, admin_user</ValidValues>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Description>为用户应用预定义的默认权限策略。根据策略名称自动创建对应的权限规则和UserPermissions配置。</Description>
+      <Behavior>
+        <Step>1. 从DEFAULT_POLICIES查找指定策略</Step>
+        <Step>2. 根据策略定义创建PermissionRule列表</Step>
+        <Step>3. 组装UserPermissions并调用set_user_permissions</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="InvalidRuleError">
+          <Description>未知策略名称</Description>
+          <ErrorCode>400</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="filter_allowed_tools" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="user_id" type="str" required="true">
+            <Description>用户唯一标识</Description>
+          </Parameter>
+          <Parameter name="tool_names" type="List[str]" required="true">
+            <Description>工具名称列表</Description>
+          </Parameter>
+        </Input>
+        <Output type="List[str]">
+          <Description>用户被允许执行的工具名称列表（不含需confirm的标记）</Description>
+        </Output>
+      </Signature>
+      <Description>从工具列表中过滤出用户有权执行的工具。常用于ToolRegistry.get_available_tools_for_llm的权限过滤。</Description>
+      <Behavior>
+        <Step>1. 遍历输入的工具名称列表</Step>
+        <Step>2. 对每个工具调用check_permission</Step>
+        <Step>3. 收集allowed=true的工具名返回</Step>
+      </Behavior>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 权限模型 ==================== -->
+  <PermissionModels>
+    <Model name="allowlist">
+      <Description>允许列表模式 - 默认拒绝，仅允许列表中的工具</Description>
+      <Behavior>
+        <Step>1. 初始化时无任何权限</Step>
+        <Step>2. 只有通过add_rule显式allow的工具才能使用</Step>
+        <Step>3. 无匹配规则时默认deny</Step>
+      </Behavior>
+      <UseCase>高安全环境，严格限制用户可操作范围</UseCase>
+    </Model>
+
+    <Model name="denylist">
+      <Description>拒绝列表模式 - 默认允许，仅拒绝列表中的工具</Description>
+      <Behavior>
+        <Step>1. 初始化时允许所有工具</Step>
+        <Step>2. 通过add_rule显式deny的工具禁止使用</Step>
+        <Step>3. 无匹配规则时默认allow</Step>
+      </Behavior>
+      <UseCase>开放环境，仅限制高危操作</UseCase>
+    </Model>
+  </PermissionModels>
+
+  <!-- ==================== 6. 默认权限策略 ==================== -->
+  <DefaultPolicies>
+    <Policy name="anonymous_user">
+      <Description>未认证用户的默认权限</Description>
+      <Mode>allowlist</Mode>
+      <AllowedTools>search_web, calculator</AllowedTools>
+      <DeniedTools>terminal, file_write, file_delete</DeniedTools>
+    </Policy>
+
+    <Policy name="standard_user">
+      <Description>普通认证用户的默认权限</Description>
+      <Mode>denylist</Mode>
+      <AllowedTools>*</AllowedTools>
+      <DeniedTools>terminal</DeniedTools>
+      <ConfirmTools>file_write, file_delete</ConfirmTools>
+    </Policy>
+
+    <Policy name="admin_user">
+      <Description>管理员用户的默认权限</Description>
+      <Mode>denylist</Mode>
+      <AllowedTools>*</AllowedTools>
+      <DeniedTools/>
+      <ConfirmTools>file_delete</ConfirmTools>
+    </Policy>
+  </DefaultPolicies>
+
+  <!-- ==================== 7. 规则优先级 ==================== -->
+  <RulePriority>
+    <Description>规则按优先级从高到低依次匹配，第一个命中的规则决定结果</Description>
+    <PriorityLevels>
+      <Level value="100">显式用户+显式工具规则（如user_123 + terminal）</Level>
+      <Level value="90">显式用户+通配工具规则（如user_123 + file_*）</Level>
+      <Level value="80">通配用户+显式工具规则（如admin_* + terminal）</Level>
+      <Level value="70">通配用户+通配工具规则（如* + file_*）</Level>
+      <Level value="0">默认规则（无匹配时的fallback）</Level>
+    </PriorityLevels>
+    <Note>同优先级规则按创建时间排序，后创建的优先</Note>
+  </RulePriority>
+
+  <!-- ==================== 8. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">ToolExecutor准备执行工具</Step>
+    <Step order="2">ToolExecutor调用PermissionManager.check_permission(user_id, tool_name)</Step>
+    <Step order="3">PermissionManager获取用户权限配置</Step>
+    <Step order="4">PermissionManager按优先级遍历规则</Step>
+    <Step order="5">PermissionManager返回PermissionResult</Step>
+    <Step order="6" condition="allowed=false">ToolExecutor返回权限不足错误</Step>
+    <Step order="7" condition="requires_confirmation=true">ToolExecutor将操作标记为需确认</Step>
+    <Step order="8" condition="allowed=true 且无需确认">继续执行工具</Step>
+  </DataFlow>
+
+  <!-- ==================== 9. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Consumer component="L5.ToolExecutor">
+        <Usage>执行前权限检查</Usage>
+        <Interface>PermissionManager.check_permission(user_id, tool_name)</Interface>
+      </Consumer>
+      <Consumer component="L5.ToolRegistry">
+        <Usage>获取可用工具列表时过滤权限</Usage>
+        <Interface>PermissionManager.check_permission批量调用</Interface>
+      </Consumer>
+    </Upstream>
+
+    <Downstream>
+      <Dependency component="L5.ConfirmationManager">
+        <Usage>将confirm动作标记传递给ConfirmationManager</Usage>
+        <Note>PermissionManager返回requires_confirmation=true时，ToolExecutor会进一步调用ConfirmationManager</Note>
+      </Dependency>
+    </Downstream>
+  </Coupling>
+
+  <!-- ==================== 10. 配置项 ==================== -->
+  <Configuration>
+    <Config name="DEFAULT_MODE" type="str" default="allowlist">
+      <Description>新用户默认权限模式</Description>
+      <ValidValues>allowlist, denylist</ValidValues>
+    </Config>
+    <Config name="DEFAULT_ACTION" type="str" default="deny">
+      <Description>无规则匹配时的默认动作</Description>
+      <ValidValues>allow, deny, confirm</ValidValues>
+    </Config>
+    <Config name="AUDIT_LOG_ENABLED" type="bool" default="true">
+      <Description>是否启用权限审计日志</Description>
+    </Config>
+    <Config name="AUDIT_LOG_MAX_ENTRIES" type="int" default="10000">
+      <Description>审计日志最大条目数（循环覆盖）</Description>
+    </Config>
+    <Config name="RULE_MAX_PER_USER" type="int" default="100">
+      <Description>单个用户最大规则数</Description>
+    </Config>
+  </Configuration>
+
+  <!-- ==================== 11. 异常定义 ==================== -->
+  <Exceptions>
+    <Exception name="InvalidRuleError">
+      <Description>权限规则格式不合法</Description>
+      <ErrorCode>400</ErrorCode>
+    </Exception>
+    <Exception name="RuleLimitExceeded">
+      <Description>用户规则数量超过限制</Description>
+      <ErrorCode>413</ErrorCode>
+    </Exception>
+    <Exception name="PermissionDeniedError">
+      <Description>权限被拒绝（由ToolExecutor抛出）</Description>
+      <ErrorCode>403</ErrorCode>
+    </Exception>
+  </Exceptions>
+
+  <!-- ==================== 12. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="PM-001">
+      <Name>允许列表-基本授权</Name>
+      <Steps>
+        <Step>创建allowlist模式用户</Step>
+        <Step>添加规则允许file_read</Step>
+        <Step>检查file_read权限</Step>
+      </Steps>
+      <Expected>PermissionResult(allowed=true)</Expected>
+    </TestCase>
+
+    <TestCase id="PM-002">
+      <Name>允许列表-默认拒绝</Name>
+      <Steps>
+        <Step>创建allowlist模式用户</Step>
+        <Step>不添加任何规则</Step>
+        <Step>检查terminal权限</Step>
+      </Steps>
+      <Expected>PermissionResult(allowed=false)</Expected>
+    </TestCase>
+
+    <TestCase id="PM-003">
+      <Name>拒绝列表-基本拒绝</Name>
+      <Steps>
+        <Step>创建denylist模式用户</Step>
+        <Step>添加规则拒绝terminal</Step>
+        <Step>检查terminal权限</Step>
+      </Steps>
+      <Expected>PermissionResult(allowed=false)</Expected>
+    </TestCase>
+
+    <TestCase id="PM-004">
+      <Name>通配符匹配</Name>
+      <Steps>
+        <Step>添加规则允许file_*</Step>
+        <Step>检查file_read和file_write权限</Step>
+      </Steps>
+      <Expected>两者均allowed=true</Expected>
+    </TestCase>
+
+    <TestCase id="PM-005">
+      <Name>规则优先级</Name>
+      <Steps>
+        <Step>添加低优先级规则允许*</Step>
+        <Step>添加高优先级规则拒绝terminal</Step>
+        <Step>检查terminal权限</Step>
+      </Steps>
+      <Expected>allowed=false（高优先级规则优先）</Expected>
+    </TestCase>
+
+    <TestCase id="PM-006">
+      <Name>二次确认标记</Name>
+      <Steps>
+        <Step>添加规则confirm file_write</Step>
+        <Step>检查file_write权限</Step>
+      </Steps>
+      <Expected>PermissionResult(allowed=true, requires_confirmation=true)</Expected>
+    </TestCase>
+
+    <TestCase id="PM-007">
+      <Name>审计日志</Name>
+      <Steps>
+        <Step>启用审计日志</Step>
+        <Step>执行多次权限检查</Step>
+        <Step>查询审计日志</Step>
+      </Steps>
+      <Expected>日志包含所有检查记录</Expected>
+    </TestCase>
+  </Testing>
+
+  <!-- ==================== 13. 实现提示 ==================== -->
+  <ImplementationNotes>
+    <Note>通配符匹配使用Python标准库fnmatch模块</Note>
+    <Note>用户权限配置建议持久化到Redis或数据库，支持分布式部署</Note>
+    <Note>审计日志使用环形缓冲区（collections.deque）实现固定容量</Note>
+    <Note>规则变更应触发缓存失效（若有缓存层）</Note>
+    <Note>PermissionManager本身无状态，状态存储在外部（如Redis），便于水平扩展</Note>
+  </ImplementationNotes>
+
+</ComponentSpec>

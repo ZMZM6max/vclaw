@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L5: 能力抽象层 (Tools &amp; Capabilities)
+  创建时间: 2024
+  用途: 详细定义第五层的架构、接口、耦合和测试规范
+-->
+<Layer id="L5" name="ToolsCapabilities" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>系统的技能包，负责工具定义、API封装、函数调用协议与工具描述管理</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">工具注册与发现（动态加载和管理工具）</Item>
+      <Item priority="critical">参数验证（JSON Schema校验LLM生成的参数）</Item>
+      <Item priority="high">工具路由（将工具名映射到实际执行器）</Item>
+      <Item priority="high">结果格式化（统一工具执行结果的输出格式）</Item>
+      <Item priority="medium">工具元数据管理（描述工具功能供LLM使用）</Item>
+      <Item priority="medium">执行超时控制（防止工具执行时间过长）</Item>
+    </Responsibilities>
+
+    <Components>
+      <Component name="ToolRegistry">
+        <Description>工具注册表，管理所有可用工具</Description>
+        <Methods>
+          <Method>register(name: str, tool: Tool) -&gt; None</Method>
+          <Method>unregister(name: str) -&gt; None</Method>
+          <Method>get(name: str) -&gt; Optional[Tool]</Method>
+          <Method>list_tools() -&gt; List[Tool]</Method>
+        </Methods>
+        <SupportedTools>
+          <Tool name="python_repl">
+            <Description>执行Python代码</Description>
+            <Params>{"code": "要执行的代码"}</Params>
+          </Tool>
+          <Tool name="search_web">
+            <Description>搜索网络</Description>
+            <Params>{"query": "搜索关键词"}</Params>
+          </Tool>
+          <Tool name="file_read">
+            <Description>读取文件</Description>
+            <Params>{"path": "文件路径"}</Params>
+          </Tool>
+          <Tool name="file_write">
+            <Description>写入文件</Description>
+            <Params>{"path": "文件路径", "content": "内容"}</Params>
+          </Tool>
+          <Tool name="terminal">
+            <Description>执行终端命令</Description>
+            <Params>{"command": "命令"}</Params>
+          </Tool>
+          <Tool name="calculator">
+            <Description>数学计算</Description>
+            <Params>{"expression": "数学表达式"}</Params>
+          </Tool>
+          <Tool name="file_search">
+            <Description>模糊文件搜索，根据关键词或部分文件名查找文件位置</Description>
+            <Params>{"keyword": "搜索关键词或部分文件名", "directory": "可选：搜索目录（默认documents/）"}</Params>
+            <TriggerKeywords>找, 查找, 搜索, 定位, 有没有, 在哪</TriggerKeywords>
+            <Note>当用户意图为文件查询但路径不明确时，优先调用file_search而非直接反问用户</Note>
+          </Tool>
+        </SupportedTools>
+      </Component>
+
+      <Component name="ParameterValidator">
+        <Description>参数验证器，校验LLM生成的参数</Description>
+        <Schema>JSON Schema</Schema>
+        <Methods>
+          <Method>validate(params: dict, schema: dict) -&gt; ValidationResult</Method>
+          <Method>sanitize(params: dict, schema: dict) -&gt; dict</Method>
+        </Methods>
+        <ValidationRules>
+          <Rule>参数类型匹配</Rule>
+          <Rule>必需字段检查</Rule>
+          <Rule>值范围限制</Rule>
+          <Rule>字符串长度限制</Rule>
+          <Rule>路径安全校验（防止目录遍历）</Rule>
+          <Rule priority="high">参数保真校验：对比L1.DataValidator传递的raw_user_payload与LLM产出的参数，检测幻觉覆盖（如路径篡改、内容改写）</Rule>
+        </ValidationRules>
+        <FidelityCheck>
+          <Source>L1.DataValidator → raw_user_payload（用户原始输入中的路径、内容等关键字段）</Source>
+          <Check>文件路径一致性：LLM生成的path必须与用户原始输入中的路径一致（允许沙盒前缀转换，禁止内容篡改）</Check>
+          <Check>内容一致性：LLM生成的content必须与用户原始输入中的内容一致（禁止添加、删除或修改用户明确指定的内容）</Check>
+          <ActionOnMismatch>返回ValidationError，提示"参数与用户原始输入不一致，请确认"</ActionOnMismatch>
+        </FidelityCheck>
+      </Component>
+
+      <Component name="ToolExecutor">
+        <Description>工具执行器，实际调用工具实现。对代码/命令类工具委派至L6执行</Description>
+        <Methods>
+          <Method>execute(tool: Tool, params: dict) -&gt; ExecutionResult</Method>
+        </Methods>
+        <PreExecutionChecks>
+          <Check name="existence_check" applies_to="file_write">
+            <Description>写入文件前检查目标路径是否已存在</Description>
+            <OnConflict>路由到 ConfirmationManager 询问用户（覆盖/重命名/取消）</OnConflict>
+          </Check>
+        </PreExecutionChecks>
+        <DelegationToL6>
+          <Condition>工具类型为 python_repl、terminal、javascript 或需要沙盒隔离执行时</Condition>
+          <CallChain>ToolExecutor → L6.SandboxManager.create() → L6.ResourceLimiter.set() → L6.SecurityEnforcer.validate() → L6.CodeExecutor.run() / L6.DockerController.exec() → L6.SandboxManager.destroy()</CallChain>
+          <Return>L6返回 ExecutionResult（含 exit_code、stdout、stderr、resource_usage）</Return>
+        </DelegationToL6>
+        <Timeout>
+          <Default>30秒</Default>
+          <Max>300秒（5分钟）</Max>
+        </Timeout>
+      </Component>
+
+      <Component name="ResultFormatter">
+        <Description>结果格式化器，统一输出格式</Description>
+        <Format>
+          <Status>success / error</Status>
+          <Result>结果字符串（截断至最大长度）</Result>
+          <Metadata>执行时间、工具名等</Metadata>
+        </Format>
+        <MaxResultLength>10000字符</MaxResultLength>
+        <EmptyResultHandling>
+          <Rule>空字符串内容必须显式标记为 empty=true，禁止返回"模拟读取"等占位文本</Rule>
+          <Rule>空文件读取：向用户返回"该文档为空"</Rule>
+          <Rule>Mock/模拟标识不得泄漏到用户可见的回复中</Rule>
+          <Rule>空搜索结果：向用户返回"未找到相关内容"</Rule>
+          <Rule>空计算结果：向用户返回"计算结果为空"</Rule>
+        </EmptyResultHandling>
+        <ResultTemplates>
+          <Template scenario="empty_file_read">该文档为空</Template>
+          <Template scenario="empty_search">未找到相关内容</Template>
+          <Template scenario="empty_calculation">计算结果为空</Template>
+          <Template scenario="success_file_write">已成功写入《{filename}》，共{char_count}字</Template>
+          <Template scenario="success_file_read">文件《{filename}》内容如下：\n{content}</Template>
+          <Template scenario="list_result">找到以下{count}项：\n{items}\n请确认是否需要打开？</Template>
+          <Template scenario="list_result_short">找到{count}个结果，需要查看具体内容吗？</Template>
+        </ResultTemplates>
+        <OutputStyles>
+          <Style name="enumeration" applies_to="list_result, directory_listing">
+            <Rule>枚举型结果必须列出条目并附确认问句（"请确认是否需要打开？"）</Rule>
+            <Rule>条目超过10条时显示前10条并提示"还有更多"</Rule>
+          </Style>
+          <Style name="empty" applies_to="empty_file_read, empty_search, empty_calculation">
+            <Rule>空结果使用口语化短句（3-8字），禁止返回"模拟读取"等占位文本</Rule>
+          </Style>
+        </OutputStyles>
+      </Component>
+      
+      <Component name="PermissionManager">
+        <Description>权限管理器，管理用户对工具的访问权限</Description>
+        <Responsibilities>
+          <Item>定义用户权限模式（允许列表/拒绝列表）</Item>
+          <Item>支持通配符匹配规则</Item>
+          <Item>判断用户是否有权执行特定工具</Item>
+          <Item>标记需二次确认的操作</Item>
+        </Responsibilities>
+        <Methods>
+          <Method>check_permission(user_id: str, tool_name: str) -&gt; PermissionResult</Method>
+          <Method>add_rule(rule: PermissionRule) -&gt; None</Method>
+        </Methods>
+      </Component>
+
+      <Component name="ConfirmationManager">
+        <Description>二次确认管理器，对高危操作判断是否需用户确认</Description>
+        <Responsibilities>
+          <Item>评估操作风险等级（基于工具类型和参数）</Item>
+          <Item>对高危操作（如删除、覆盖、批量清理）触发二次确认，禁止直接拒绝</Item>
+          <Item>生成确认提示语，说明操作内容和风险</Item>
+        </Responsibilities>
+        <TriggerConditions>
+          <Condition>工具类型为 terminal 且命令涉及写操作</Condition>
+          <Condition>工具类型为 file_write 且目标文件已存在</Condition>
+          <Condition>工具类型为 file_delete（删除单个文件或批量清空目录）</Condition>
+          <Condition>操作被 PermissionManager 标记为需确认</Condition>
+        </TriggerConditions>
+        <Rules>
+          <Rule priority="critical">对于用户主动发起的合法高危操作（如删除文件、清空文件夹），必须走 ConfirmationManager 挂起流程，禁止由 SecurityGuard 或 PermissionManager 直接拒绝</Rule>
+          <Rule priority="high">高危操作前必须进行预扫描（dry-run）获取统计摘要：文件数量、类型分布、总大小</Rule>
+          <Rule>删除操作挂起模板："确定要删除《{filename}》吗？删了就找不回了哦。[确认/取消]"</Rule>
+          <Rule>批量删除挂起模板："{path} 里有 {count} 个文件（{file_types}），确定要全部清空吗？[确认/取消]"</Rule>
+          <Rule>文件覆盖挂起模板："该位置已有同名文件，是否覆盖？[覆盖/重命名/取消]"</Rule>
+        </Rules>
+        <PreConfirmSummary>
+          <Step order="1">调用ToolExecutor预扫描（dry-run模式）获取目标路径的元数据</Step>
+          <Step order="2">统计文件数量、类型分布、总大小</Step>
+          <Step order="3">将统计摘要嵌入确认消息模板</Step>
+          <Note>预扫描不执行实际删除/写入操作，仅收集元数据用于用户决策</Note>
+        </PreConfirmSummary>
+        <Methods>
+          <Method>needs_confirmation(action: AgentAction, user_permissions: dict) -&gt; bool</Method>
+          <Method>generate_confirmation_prompt(action: AgentAction) -&gt; str</Method>
+        </Methods>
+      </Component>
+
+      <Component name="BashAnalyzer">
+        <Description>Bash命令分析器，对终端命令进行风险分类</Description>
+        <Responsibilities>
+          <Item>将Bash命令分类为 SAFE / READ / WRITE / NETWORK / EXEC</Item>
+          <Item>评估命令风险等级（minimal / low / medium / high / critical）</Item>
+          <Item>识别危险模式（如 rm -rf、管道到shell等）</Item>
+        </Responsibilities>
+        <CommandTypes>
+          <Type>SAFE - 只读操作（ls, cat, grep, echo）</Type>
+          <Type>READ - 文件读取（cat, head, less）</Type>
+          <Type>WRITE - 破坏性写入（rm, mv, &gt;）</Type>
+          <Type>NETWORK - 网络访问（curl, wget, ssh）</Type>
+          <Type>EXEC - 代码执行（bash, python, make）</Type>
+        </CommandTypes>
+        <Methods>
+          <Method>analyze(command: str) -&gt; ClassificationResult</Method>
+        </Methods>
+      </Component>
+    </Components>
+
+    <DataFlow>
+      <Step order="1">接收AgentAction（来自L3）</Step>
+      <Step order="2">ToolRegistry查找工具</Step>
+      <Step order="3">ParameterValidator验证参数</Step>
+      <Step order="4">PermissionManager检查用户权限</Step>
+      <Step order="5">BashAnalyzer分析命令风险等级（适用于terminal工具）</Step>
+      <Step order="5a" condition="BashAnalyzer判定为高危（WRITE/NETWORK/EXEC）">路由到ConfirmationManager进行挂起确认</Step>
+      <Step order="6">ConfirmationManager判断是否需要二次确认（高危操作或PermissionManager标记需确认）</Step>
+      <Step order="7">ToolExecutor执行工具（如为python/javascript/bash代码或terminal命令，委派至L6.RuntimeEnvironment）</Step>
+      <Step order="7.1" condition="代码/命令执行">ToolExecutor → L6.SandboxManager → L6.SecurityEnforcer + L6.ResourceLimiter → L6.CodeExecutor/L6.DockerController</Step>
+      <Step order="8">ResultFormatter格式化结果（含EmptyResultHandling规则）</Step>
+      <Step order="9">返回Observation（给L3）</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="execute">
+      <Signature>
+        <Input>
+          <Parameter name="action_name" type="str" required="true">
+            <Description>工具名称</Description>
+            <ValidValues>python_repl, search_web, file_read, file_write, terminal, calculator, ...</ValidValues>
+          </Parameter>
+          <Parameter name="params" type="dict" required="true">
+            <Description>工具参数</Description>
+            <Example>
+              <![CDATA[
+              {
+                "code": "print('Hello World')",
+                "language": "python"
+              }
+              ]]>
+            </Example>
+          </Parameter>
+          <Parameter name="timeout" type="int" required="false" default="30">
+            <Description>执行超时时间（秒）</Description>
+            <Constraints>1 &lt;= timeout &lt;= 300</Constraints>
+          </Parameter>
+        </Input>
+
+        <Output type="Observation">
+          <Field name="status" type="str" required="true">
+            <Description>执行状态</Description>
+            <ValidValues>success, error</ValidValues>
+          </Field>
+          <Field name="result" type="str" required="true">
+            <Description>执行结果的字符串表示</Description>
+            <Constraints>最大长度10000字符，超出部分截断</Constraints>
+          </Field>
+          <Field name="execution_time" type="float" required="true">
+            <Description>实际执行耗时（秒）</Description>
+          </Field>
+          <Field name="metadata" type="dict" required="false">
+            <Description>附加元数据</Description>
+            <Fields>
+              <Field name="tool_name">工具名称</Field>
+              <Field name="params" type="dict">实际使用的参数</Field>
+              <Field name="exit_code" type="int">退出码（代码执行工具）</Field>
+              <Field name="truncated" type="bool">结果是否被截断</Field>
+            </Fields>
+          </Field>
+        </Output>
+
+        <Exceptions>
+          <Exception name="ToolNotFoundError">
+            <Description>工具不存在</Description>
+            <ErrorCode>404</ErrorCode>
+          </Exception>
+          <Exception name="ValidationError">
+            <Description>参数验证失败</Description>
+            <ErrorCode>400</ErrorCode>
+          </Exception>
+          <Exception name="ExecutionTimeoutError">
+            <Description>工具执行超时</Description>
+            <ErrorCode>408</ErrorCode>
+          </Exception>
+          <Exception name="ExecutionError">
+            <Description>工具执行失败（如代码运行时错误）</Description>
+            <ErrorCode>500</ErrorCode>
+          </Exception>
+        </Exceptions>
+      </Signature>
+    </PrimaryMethod>
+
+    <SecondaryMethod name="get_available_tools">
+      <Signature>
+        <Output type="list[dict]">
+          <Description>所有可用工具列表（OpenAI格式）</Description>
+        </Output>
+      </Signature>
+    </SecondaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 参数验证规则 ==================== -->
+  <ValidationRules>
+    <GeneralRules>
+      <Rule>检查必需字段是否存在</Rule>
+      <Rule>检查字段类型是否匹配</Rule>
+      <Rule>检查字符串长度（最大10000字符）</Rule>
+    </GeneralRules>
+
+    <PathValidation>
+      <Description>文件操作工具（file_read/file_write）的路径安全检查</Description>
+      <AppliesTo>
+        <Tool>file_read</Tool>
+        <Tool>file_write</Tool>
+      </AppliesTo>
+      <Rules>
+        <Rule priority="critical">
+          <Name>沙盒路径前缀检查</Name>
+          <Description>路径必须以"documents/"开头</Description>
+          <ValidPrefixes>
+            <Prefix>documents/</Prefix>
+            <Prefix>documents/desktop/</Prefix>
+            <Prefix>documents/downloads/</Prefix>
+          </ValidPrefixes>
+          <ErrorMessage>路径必须在沙盒范围内，必须以"documents/"开头</ErrorMessage>
+        </Rule>
+
+        <Rule priority="critical">
+          <Name>目录遍历防护</Name>
+          <Description>禁止包含".."等目录遍历字符</Description>
+          <ForbiddenPatterns>
+            <Pattern>../</Pattern>
+            <Pattern>..\</Pattern>
+            <Pattern>..</Pattern>
+          </ForbiddenPatterns>
+          <ErrorMessage>检测到目录遍历攻击，路径包含非法字符</ErrorMessage>
+        </Rule>
+
+        <Rule priority="high">
+          <Name>系统敏感目录防护</Name>
+          <Description>禁止访问系统敏感目录</Description>
+          <ForbiddenPaths>
+            <Path>/etc</Path>
+            <Path>/sys</Path>
+            <Path>/bin</Path>
+            <Path>/sbin</Path>
+            <Path>C:\Windows</Path>
+            <Path>C:\Program Files</Path>
+          </ForbiddenPaths>
+          <ErrorMessage>禁止访问系统敏感目录</ErrorMessage>
+        </Rule>
+
+        <Rule priority="high">
+          <Name>绝对路径防护</Name>
+          <Description>禁止绝对路径，必须使用相对路径</Description>
+          <ForbiddenPatterns>
+            <Pattern>/</Pattern>
+            <Pattern>C:\</Pattern>
+            <Pattern>D:\</Pattern>
+          </ForbiddenPatterns>
+          <ErrorMessage>禁止使用绝对路径，请使用沙盒内的相对路径</ErrorMessage>
+        </Rule>
+      </Rules>
+
+      <Note>
+        L3层应负责将用户友好的路径（如"桌面/"）转换为沙盒路径（"documents/desktop/"）。
+        如果L3未正确转换，L5应在验证失败时返回清晰的错误信息，
+        建议用户联系系统管理员或检查路径格式。
+      </Note>
+
+      <Examples>
+        <ValidExample>
+          <Path>documents/desktop/会议提醒.txt</Path>
+          <Result>通过</Result>
+        </ValidExample>
+        <ValidExample>
+          <Path>documents/downloads/report.pdf</Path>
+          <Result>通过</Result>
+        </ValidExample>
+        <InvalidExample>
+          <Path>桌面/会议提醒.txt</Path>
+          <Result>失败 - 缺少documents/前缀</Result>
+        </InvalidExample>
+        <InvalidExample>
+          <Path>../etc/passwd</Path>
+          <Result>失败 - 目录遍历攻击</Result>
+        </InvalidExample>
+      </Examples>
+    </PathValidation>
+  </ValidationRules>
+
+  <!-- ==================== 4. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Layer id="L3">逻辑编排层 (Orchestration)</Layer>
+      <Relation>被调用（接收AgentAction）</Relation>
+      <Method>L3通过ToolsInterface调用L5.execute()</Method>
+      <DataFormat>AgentAction对象</DataFormat>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="L6">环境执行层 (Runtime &amp; Environment)</Layer>
+      <Relation>调用（执行实际代码和命令）</Relation>
+      <Method>L5.ToolExecutor通过RuntimeInterface调用L6.run_code()或L6.run_command()</Method>
+      <DataFormat>ExecutionResult对象</DataFormat>
+      <Communication>进程间通信或方法调用</Communication>
+      <CallChain>
+        <Step>ToolExecutor判断工具类型是否需要沙盒执行</Step>
+        <Step>L6.SandboxManager创建隔离环境</Step>
+        <Step>L6.SecurityEnforcer执行前安全检查</Step>
+        <Step>L6.ResourceLimiter设置资源配额</Step>
+        <Step>L6.CodeExecutor / L6.DockerController执行代码</Step>
+        <Step>L6.SandboxManager销毁环境</Step>
+        <Step>L6.ExecutionLogger记录执行日志</Step>
+      </CallChain>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>models.AgentAction - 输入数据结构</Dependency>
+        <Dependency>models.Observation - 输出数据结构</Dependency>
+        <Dependency>models.ExecutionResult - L6返回结果</Dependency>
+        <Dependency>interfaces.ToolsInterface - 接口定义</Dependency>
+        <Dependency>interfaces.RuntimeInterface - L6接口</Dependency>
+      </Internal>
+      <External>
+        <Dependency>jsonschema - JSON Schema验证</Dependency>
+        <Dependency>aiohttp - 网络请求（search_web工具）</Dependency>
+        <Dependency>duckduckgo-search - 搜索API</Dependency>
+      </External>
+    </Dependencies>
+
+    <CouplingStrength>中等耦合</CouplingStrength>
+    <CouplingType>依赖注入（L5调用L6）+ 接口抽象（被L3调用）</CouplingType>
+
+    <Note>
+      L5是工具调用的中央路由，负责参数验证和结果格式化。它通过接口调用L6执行实际代码，
+      同时被L3通过接口调用。L5是工具的抽象层，所有工具调用都经过它的统一处理。
+    </Note>
+  </Coupling>
+  
+</Layer>

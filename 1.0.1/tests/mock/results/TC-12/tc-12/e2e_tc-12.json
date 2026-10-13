@@ -1,0 +1,328 @@
+{
+  "request_id": "tc-12",
+  "start_time": "2026-04-21T18:19:22.002332",
+  "end_time": "2026-04-21T18:19:51.126144",
+  "status": "failed",
+  "error_message": "L5错误: 参数与用户原始输入不一致，请确认",
+  "final_response": null,
+  "layer_results": [
+    {
+      "layer_name": "L1",
+      "timestamp": "2026-04-21T18:19:22.002401",
+      "execution_time": 4.179964303970337,
+      "processing_log": [
+        "[1] 接收原始数据 - 渠道: telegram",
+        "[2] ProtocolAdapter解析数据",
+        "[3] DataValidator验证字段完整性",
+        "[4] EventNormalizer转换为StandardEvent",
+        "[5] 验证通过，返回结果"
+      ],
+      "component_trace": [
+        {
+          "component": "ProtocolAdapter",
+          "status": "success",
+          "reason": "已按telegram协议解析原始数据并提取字段",
+          "output_summary": "channel=telegram, user_id=test_user_001, content_length=9"
+        },
+        {
+          "component": "DataValidator",
+          "status": "success",
+          "reason": "字段完整性与时间戳有效性验证通过",
+          "output_summary": "user_id有效, content非空, timestamp在允许范围内"
+        },
+        {
+          "component": "EventNormalizer",
+          "status": "success",
+          "reason": "已转换为StandardEvent标准格式",
+          "output_summary": "standard_event.channel=telegram"
+        },
+        {
+          "component": "ErrorHandler",
+          "status": "skipped",
+          "reason": "本次处理未发生错误，无需重试或退避",
+          "output_summary": "no_error"
+        },
+        {
+          "component": "SessionManager",
+          "status": "success",
+          "reason": "已创建或复用会话映射",
+          "output_summary": "session_key=telegram:test_user_001"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L2",
+      "timestamp": "2026-04-21T18:19:31.612762",
+      "execution_time": 4.248905897140503,
+      "processing_log": [
+        "[1] 限流检查: 用户test_user_001剩余59次请求",
+        "[2] 会话管理: 创建新会话 550e8400-e29b-41d4-a716-446655440000",
+        "[3] 历史检索: 从L4获取0条历史记录",
+        "[4] 记忆检索: 从L4获取0条相关记忆",
+        "[5] 工具准备: 根据权限筛选出4个可用工具",
+        "[6] 上下文组装: 生成完整的L3输入"
+      ],
+      "component_trace": [
+        {
+          "component": "RateLimiter",
+          "status": "success",
+          "reason": "请求未超限，按用户/IP/全局规则通过",
+          "output_summary": "user_remaining=59, ip_allowed=true, global_allowed=true"
+        },
+        {
+          "component": "SessionManager",
+          "status": "success",
+          "reason": "已为用户创建或获取会话",
+          "output_summary": "session_id=550e8400-e29b-41d4-a716-446655440000, ttl=3600"
+        },
+        {
+          "component": "HistoryRetriever",
+          "status": "success",
+          "reason": "从L4检索到真实历史结果为空",
+          "output_summary": "history_count=0"
+        },
+        {
+          "component": "ToolPreparer",
+          "status": "success",
+          "reason": "已按用户权限筛选可用工具",
+          "output_summary": "available_tools_count=4"
+        },
+        {
+          "component": "ContextAssembler",
+          "status": "success",
+          "reason": "已完成标准事件、会话、工具与记忆的上下文组装",
+          "output_summary": "l3_input_ready=true"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L3",
+      "timestamp": "2026-04-21T18:19:35.863870",
+      "execution_time": 5.504725456237793,
+      "processing_log": [
+        "[1] 接收SessionContext",
+        "[2] SecurityGuard分类: 正常请求",
+        "[3] MemoryAccessor检索: 无相关记忆可用",
+        "[4] TaskPlanner识别为文件写入任务",
+        "[5] LLMManager生成工具调用决策",
+        "[6] ReActEngine进入第1轮",
+        "[7] ToolCaller准备调用file_write"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityGuard",
+          "status": "active",
+          "reason": "已完成安全分类，当前请求为正常文件保存操作",
+          "output_summary": "分类结果: 正常请求"
+        },
+        {
+          "component": "MemoryAccessor",
+          "status": "success",
+          "reason": "检索会话记忆以增强上下文",
+          "output_summary": "未检索到可用相关记忆"
+        },
+        {
+          "component": "TaskPlanner",
+          "status": "success",
+          "reason": "将请求规划为单步文件写入任务",
+          "output_summary": "任务类型: atomic/file_write"
+        },
+        {
+          "component": "LLMManager",
+          "status": "success",
+          "reason": "生成面向工具调用的决策",
+          "output_summary": "选择工具: file_write"
+        },
+        {
+          "component": "ReActEngine",
+          "status": "active",
+          "reason": "ReAct循环第1轮，等待工具执行结果",
+          "output_summary": "已生成AgentAction"
+        },
+        {
+          "component": "ToolCaller",
+          "status": "active",
+          "reason": "决定调用file_write并构造参数",
+          "output_summary": "path=documents/今天聊的保存一下.txt"
+        },
+        {
+          "component": "ErrorTranslator",
+          "status": "skipped",
+          "reason": "当前尚未产生工具错误，无需转译",
+          "output_summary": "未触发"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L5",
+      "timestamp": "2026-04-21T18:19:41.372085",
+      "execution_time": 4.7143495082855225,
+      "processing_log": [
+        "[1] 接收AgentAction",
+        "[2] ToolRegistry: 查找工具",
+        "[3] ParameterValidator: 验证参数",
+        "[3.1] 错误: 检测到内容参数与原始输入可能不一致，触发保真校验失败"
+      ],
+      "component_trace": [
+        {
+          "component": "ToolRegistry",
+          "status": "active",
+          "reason": "接收请求后开始查找目标工具",
+          "output_summary": "tool=file_write"
+        },
+        {
+          "component": "ParameterValidator",
+          "status": "error",
+          "reason": "参数保真校验失败，疑似LLM生成内容与原始输入不一致",
+          "output_summary": "content mismatch"
+        },
+        {
+          "component": "ToolExecutor",
+          "status": "skipped",
+          "reason": "参数未通过验证，未执行工具"
+        },
+        {
+          "component": "ResultFormatter",
+          "status": "skipped",
+          "reason": "前置校验失败，无需格式化成功结果"
+        },
+        {
+          "component": "PermissionManager",
+          "status": "success",
+          "reason": "已确认用户具备file_write权限",
+          "output_summary": "permission granted"
+        },
+        {
+          "component": "ConfirmationManager",
+          "status": "skipped",
+          "reason": "未进入高危覆盖确认流程",
+          "output_summary": "no overwrite check triggered"
+        },
+        {
+          "component": "BashAnalyzer",
+          "status": "skipped",
+          "reason": "当前工具不是terminal，无需Bash分析"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L6",
+      "timestamp": "2026-04-21T18:19:46.088871",
+      "execution_time": 5.035559415817261,
+      "processing_log": [
+        "[1] 输入验证: 检测到操作类型为environment_prepare，action_type为file_write",
+        "[2] 安全检查: 通过 - 无代码执行内容可审查",
+        "[3] SandboxManager: 未触发 - 该请求不是代码执行任务",
+        "[4] ResourceLimiter: 未触发 - 无需设置执行资源限制",
+        "[5] CodeExecutor: 未触发 - 当前接口不支持文件写入操作",
+        "[6] SecurityEnforcer: 未触发 - 无运行时执行过程",
+        "[7] ExecutionLogger: 记录拒绝原因与请求摘要",
+        "[8] 完成: 返回错误结果"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityEnforcer",
+          "status": "success",
+          "reason": "已完成请求类型与基础安全检查，未发现代码级安全风险。",
+          "output_summary": "非代码请求，未检测到危险导入或系统调用。"
+        },
+        {
+          "component": "SandboxManager",
+          "status": "skipped",
+          "reason": "当前请求不是代码执行任务，因此未创建沙盒环境。"
+        },
+        {
+          "component": "ResourceLimiter",
+          "status": "skipped",
+          "reason": "未进入代码执行流程，因此未设置CPU、内存或超时限制。"
+        },
+        {
+          "component": "CodeExecutor",
+          "status": "skipped",
+          "reason": "接口仅支持run_code代码执行，当前为file_write操作。"
+        },
+        {
+          "component": "DockerController",
+          "status": "skipped",
+          "reason": "未使用Docker模式执行代码，因此未触发容器管理。"
+        },
+        {
+          "component": "ExecutionLogger",
+          "status": "success",
+          "reason": "已记录本次请求的拒绝原因和处理过程。",
+          "output_summary": "operation=environment_prepare, action_type=file_write"
+        }
+      ],
+      "error": null
+    }
+  ],
+  "layer_transfers": [
+    {
+      "from_layer": "L1",
+      "to_layer": "L2",
+      "data_type": "StandardEvent",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "把今天聊的保存一下",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "e4d5b33f-eb07-4e34-bcfb-2662ddd779d1"
+          }
+        }
+      },
+      "timestamp": "2026-04-21T18:19:26.186663"
+    },
+    {
+      "from_layer": "L2",
+      "to_layer": "L3",
+      "data_type": "L3CompleteInput",
+      "data": {
+        "session_context": {
+          "session_id": "550e8400-e29b-41d4-a716-446655440000",
+          "user_id": "test_user_001",
+          "current_query": "把今天聊的保存一下",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      },
+      "timestamp": "2026-04-21T18:19:35.863716"
+    },
+    {
+      "from_layer": "L3",
+      "to_layer": "L5",
+      "data_type": "AgentAction",
+      "data": {
+        "agent_action": {
+          "action": "file_write",
+          "action_input": {
+            "path": "documents/今天聊的保存一下.txt",
+            "content": "用户当前请求：把今天聊的保存一下\n会话ID：550e8400-e29b-41d4-a716-446655440000\n时间戳：1704067200\n备注：当前对话历史为空，已将本次请求作为待保存内容记录。"
+          },
+          "thought": "用户明确要求把今天聊的内容保存下来，属于文件写入场景。根据路径规则，保存到 documents/ 目录下，并使用 file_write 工具最合适。"
+        }
+      },
+      "timestamp": "2026-04-21T18:19:41.371860"
+    }
+  ]
+}

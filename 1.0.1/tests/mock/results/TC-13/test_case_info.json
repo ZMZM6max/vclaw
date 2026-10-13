@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-13",
+  "test_name": "搜索最新资讯",
+  "category": "联网功能",
+  "priority": "P1",
+  "user_input": "查一下今天A股三大指数的收盘情况，存到文档里",
+  "precondition": "系统联网正常。当天为交易日",
+  "react_flow": "Thought: 需要最新数据 -> Action: 调用 Web_Search 工具 -> Observation: 提取数据 -> 调用 File_Create 保存",
+  "expected_result": "系统: 成功执行搜素->解析网页->写入文件。结果: 回复'查好了，已经帮您把今天A股收盘情况存到文档里了。'",
+  "risk_level": "中 - 搜索返回旧数据或广告信息",
+  "test_type": "功能",
+  "tags": [
+    "可自动化"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "查一下今天A股三大指数的收盘情况，存到文档里"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:19:52.130755"
+}

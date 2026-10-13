@@ -1,0 +1,92 @@
+{
+  "request_id": "tc-05",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:16:28.886865",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "帮我整理一下电脑",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "ba1eb241-3982-49a9-8f96-a6ec55b52771"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:16:37.759084",
+      "data": {
+        "session_context": {
+          "session_id": "9a4b4a2e-7f1f-4a1d-9b4d-6a7d4c7e2f11",
+          "user_id": "test_user_001",
+          "current_query": "帮我整理一下电脑",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L2",
+      "type": "ResponseForSession",
+      "timestamp": "2026-04-21T18:16:43.502682",
+      "data": {
+        "response": "“帮我整理一下电脑”属于高危可恢复操作，我需要先确认你的具体目标后才能继续。你可以告诉我你想整理的是：桌面、下载文件夹、文档，还是某个具体目录？如果你愿意，我也可以按“按类型归类 / 删除重复文件 / 清理临时文件”帮你制定整理方案。",
+        "session_id": "9a4b4a2e-7f1f-4a1d-9b4d-6a7d4c7e2f11"
+      }
+    },
+    {
+      "step": 4,
+      "from": "L2",
+      "to": "L1",
+      "type": "ResponseWithHistory",
+      "timestamp": "2026-04-21T18:16:43.502738",
+      "data": {
+        "response": "“帮我整理一下电脑”属于高危可恢复操作，我需要先确认你的具体目标后才能继续。你可以告诉我你想整理的是：桌面、下载文件夹、文档，还是某个具体目录？如果你愿意，我也可以按“按类型归类 / 删除重复文件 / 清理临时文件”帮你制定整理方案。",
+        "session_id": "9a4b4a2e-7f1f-4a1d-9b4d-6a7d4c7e2f11",
+        "history_updated": true,
+        "history_length": 2
+      }
+    },
+    {
+      "step": 5,
+      "from": "L1",
+      "to": "User",
+      "type": "FinalOutput",
+      "timestamp": "2026-04-21T18:16:43.502781",
+      "data": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "output": "“帮我整理一下电脑”属于高危可恢复操作，我需要先确认你的具体目标后才能继续。你可以告诉我你想整理的是：桌面、下载文件夹、文档，还是某个具体目录？如果你愿意，我也可以按“按类型归类 / 删除重复文件 / 清理临时文件”帮你制定整理方案。",
+        "format": "telegram"
+      }
+    }
+  ]
+}

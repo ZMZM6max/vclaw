@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L4 Component: TextChunker
+  拆分自: L4_MemoryKnowledge.xml
+  用途: 文本分块器，将长文本切分为语义完整的片段
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L4_MemoryKnowledge.xml
+-->
+<Component id="L4.TextChunker" name="TextChunker" version="1.0">
+
+  <Description>文本分块器，将长文本切分为语义完整的片段</Description>
+
+  <Strategies>
+    <Strategy name="RecursiveCharacterTextSplitter">
+      <Description>递归字符分割，优先按段落、句子、单词分割</Description>
+      <Configuration>
+        <Param name="chunk_size" default="1000">每个块的目标字符数</Param>
+        <Param name="chunk_overlap" default="200">块之间的重叠字符数</Param>
+        <Param name="separators" default='["\\n\\n", "\\n", " ", ""]'>分割符优先级列表</Param>
+      </Configuration>
+    </Strategy>
+
+    <Strategy name="TokenTextSplitter">
+      <Description>基于Token数量分割</Description>
+      <Configuration>
+        <Param name="chunk_size" default="256">每个块的目标Token数</Param>
+        <Param name="chunk_overlap" default="50">块之间的重叠Token数</Param>
+      </Configuration>
+    </Strategy>
+
+    <Strategy name="MarkdownHeaderTextSplitter">
+      <Description>基于Markdown标题分割</Description>
+      <Configuration>
+        <Param name="headers_to_split_on" default='["#", "##", "###"]'>按哪些标题级别分割</Param>
+      </Configuration>
+    </Strategy>
+
+    <Strategy name="CharacterTextSplitter">
+      <Description>固定字符数分割，可指定分隔符优先断点</Description>
+      <Configuration>
+        <Param name="chunk_size" default="1000">每个块的目标字符数</Param>
+        <Param name="chunk_overlap" default="200">块之间的重叠字符数</Param>
+        <Param name="separator" default="">优先断点分隔符</Param>
+      </Configuration>
+    </Strategy>
+  </Strategies>
+
+  <DefaultConfig>
+    <ChunkSize>1000字符</ChunkSize>
+    <ChunkOverlap>200字符</ChunkOverlap>
+    <Separator>["\\n\\n", "\\n", " ", ""]</Separator>
+  </DefaultConfig>
+
+  <Interface>
+    <Method name="split">
+      <Signature>split(text: str) -&gt; List[str]</Signature>
+      <Description>将文本分割为块</Description>
+      <Input>
+        <Parameter name="text" type="str" required="true">输入文本</Parameter>
+      </Input>
+      <Output type="List[str]">文本块列表</Output>
+    </Method>
+
+    <Method name="split_documents">
+      <Signature>split_documents(documents: List[dict]) -&gt; List[dict]</Signature>
+      <Description>将多个文档分割为块，自动更新 metadata（chunk_index, chunk_count, chunker_type）</Description>
+      <Input>
+        <Parameter name="documents" type="List[dict]" required="true">文档列表，每项含 content 和可选 metadata</Parameter>
+      </Input>
+      <Output type="List[dict]">分块后的文档列表，metadata 已更新</Output>
+    </Method>
+  </Interface>
+
+</Component>

@@ -1,0 +1,132 @@
+{
+  "request_id": "tc-23",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:24:05.584776",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "打开桌面的《明天周报.docx》",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "a83ca613-ac6e-4c71-8f9d-53d1a1a86144"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:24:16.550539",
+      "data": {
+        "session_context": {
+          "session_id": "550e8400-e29b-41d4-a716-446655440000",
+          "user_id": "test_user_001",
+          "current_query": "打开桌面的《明天周报.docx》",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L5",
+      "type": "AgentAction",
+      "timestamp": "2026-04-21T18:24:24.555900",
+      "data": {
+        "agent_action": {
+          "action": "file_read",
+          "action_input": {
+            "path": "documents/desktop/明天周报.docx"
+          },
+          "thought": "用户要打开桌面的文档《明天周报.docx》，这是文件读取场景；根据路径规则应映射到 documents/desktop/ 下，并使用 file_read 尝试读取内容。"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "from": "L5",
+      "to": "L3",
+      "type": "Observation",
+      "timestamp": "2026-04-21T18:24:36.524850",
+      "data": {
+        "observation": {
+          "status": "success",
+          "result": "文件《明天周报.docx》内容如下：\n该文档为空",
+          "execution_time": 0.01,
+          "metadata": {
+            "tool_name": "file_read",
+            "params": {
+              "path": "documents/desktop/明天周报.docx"
+            },
+            "truncated": false,
+            "empty": true
+          }
+        }
+      }
+    },
+    {
+      "step": 5,
+      "from": "L3",
+      "to": "L2",
+      "type": "ToolResultForSession",
+      "timestamp": "2026-04-21T18:24:42.223745",
+      "data": {
+        "response": "已打开《明天周报.docx》。\n文件路径：documents/desktop/明天周报.docx\n文件内容：该文档为空。",
+        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "tool_used": "file_read",
+        "observation": "文件《明天周报.docx》内容如下：\n该文档为空"
+      }
+    },
+    {
+      "step": 6,
+      "from": "L2",
+      "to": "L1",
+      "type": "ResponseWithHistory",
+      "timestamp": "2026-04-21T18:24:42.223818",
+      "data": {
+        "response": "已打开《明天周报.docx》。\n文件路径：documents/desktop/明天周报.docx\n文件内容：该文档为空。",
+        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "history_updated": true,
+        "tool_executed": true
+      }
+    },
+    {
+      "step": 7,
+      "from": "L1",
+      "to": "User",
+      "type": "FinalOutput",
+      "timestamp": "2026-04-21T18:24:42.223867",
+      "data": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "output": "已打开《明天周报.docx》。\n文件路径：documents/desktop/明天周报.docx\n文件内容：该文档为空。",
+        "format": "telegram"
+      }
+    }
+  ]
+}

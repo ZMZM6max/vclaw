@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L3: 逻辑编排层 (Orchestration)
+  创建时间: 2024
+  用途: 详细定义第三层的架构、接口、耦合和测试规范
+-->
+<Layer id="L3" name="Orchestration" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Responsibilities>
+      <Item priority="critical">任务规划（拆解复杂请求为可执行步骤）</Item>
+      <Item priority="critical">ReAct循环驱动（Thought → Action → Observation）</Item>
+      <Item priority="high">LLM调用管理（对话管理、Token优化）</Item>
+      <Item priority="high">工具调用决策（决定何时调用工具、调用什么工具）</Item>
+      <Item priority="medium">思维链展示（提供思考过程给用户）</Item>
+      <Item priority="medium">错误恢复（LLM调用失败时的重试和降级）</Item>
+    </Responsibilities>
+
+    <Components>
+      <Component name="SecurityGuard">
+        <Description>安全判断组件，对用户请求进行安全分类（正常/敏感/恶意/高危）。作为L3入口强制守卫，必须在ReActEngine/TaskPlanner之前执行</Description>
+        <Responsibilities>
+          <Item priority="critical">识别恶意请求（格式化磁盘、删除系统文件、黑客攻击、创建恶意软件等）</Item>
+          <Item priority="critical">对请求进行安全分类：normal（正常）、sensitive（敏感）、malicious（恶意）、high-risk（高危）</Item>
+          <Item priority="high">对恶意请求直接拒绝并给出友好解释</Item>
+          <Item priority="high">对高危请求路由到ConfirmationManager进行挂起确认，禁止直接拒绝</Item>
+          <Item priority="medium">对敏感请求标记为需二次确认</Item>
+        </Responsibilities>
+        <GuardRelationship>
+          <Precedes>ReActEngine</Precedes>
+          <Precedes>TaskPlanner</Precedes>
+          <Precedes>LLMManager</Precedes>
+          <Precedes>ToolCaller</Precedes>
+          <Note>SecurityGuard是L3数据流的强制前置节点，任何请求必须先通过SecurityGuard分类后才能进入后续组件</Note>
+        </GuardRelationship>
+        <Classification>
+          <Class name="normal">普通用户请求，无需特殊处理</Class>
+          <Class name="sensitive">涉及隐私或敏感操作，需用户确认</Class>
+          <Class name="malicious">明确有害的系统操作请求，必须拒绝</Class>
+          <Class name="high-risk">可能造成数据损失的用户操作，需二次确认（由ConfirmationManager处理），禁止直接拒绝</Class>
+        </Classification>
+        <RiskLevelMatrix>
+          <Level name="low" actions="read-only, advice, query"><Trigger>文件读取、信息查询、建议类请求</Trigger><Route>直接通过，不触发二次确认</Route></Level>
+          <Level name="medium" actions="write-new"><Trigger>向新路径写入文件</Trigger><Route>允许执行，记录日志</Route></Level>
+          <Level name="high" actions="overwrite, delete, batch-clean"><Trigger>覆盖已有文件、删除文件、批量清理</Trigger><Route>路由到ConfirmationManager进行二次确认</Route></Level>
+          <Level name="critical" actions="system-attack, malicious-code"><Trigger>格式化磁盘、删除系统文件、黑客攻击、创建恶意软件</Trigger><Route>直接拒绝，返回固定拒答模板</Route></Level>
+          <Note>低风险操作禁止被升级为高危（如"整理桌面建议"必须判定为low，不得触发确认）；写入冲突（文件已存在）必须判定为high，不得直接成功</Note>
+        </RiskLevelMatrix>
+        <OutputType>模板化字符串（非LLM自由生成）</OutputType>
+        <CannedResponses>
+          <Response scenario="wechat_forward">抱歉，我无法代您发送微信消息或冒充您联系他人。如果您需要发送消息，请直接使用微信应用操作。</Response>
+          <Response scenario="malicious_system_attack">这种操作太危险了，可能会毁掉您的电脑数据，我绝对不能这么做！</Response>
+          <Response scenario="sensitive_content">抱歉，我不支持搜索此类内容哦，换个话题吧？</Response>
+          <Response scenario="permission_denied">抱歉，您没有权限执行此操作。如需授权，请联系管理员。</Response>
+        </CannedResponses>
+        <Methods>
+          <Method>classify(request: str) -&gt; SecurityClassification</Method>
+        </Methods>
+      </Component>
+
+      <Component name="ReActEngine">
+        <Description>ReAct循环引擎，实现Thought-Action-Observation循环</Description>
+        <Workflow>
+          <Step name="Thought">分析当前状态，决定下一步行动</Step>
+          <Step name="Action">执行决策（调用工具或直接回复）</Step>
+          <Step name="Observation">观察执行结果，更新状态</Step>
+          <LoopCondition>达到终止条件（得到答案或达到最大轮数）</LoopCondition>
+        </Workflow>
+        <MaxIterations>5</MaxIterations>
+        <TerminationConditions>
+          <Condition>得到最终答案</Condition>
+          <Condition>达到最大迭代次数</Condition>
+          <Condition>用户请求直接回复</Condition>
+        </TerminationConditions>
+        <ToolSelectionRules>
+          <Rule priority="critical">禁止在未调用任何检索/计算工具前直接降级为追问——必须先尝试至少一次工具调用</Rule>
+          <Rule>ToolRegistry匹配阈值：当用户请求明确涉及文件、计算、搜索时，必须生成AgentAction而非直接回复</Rule>
+          <Rule>最小尝试次数：至少1次工具调用后才能放弃工具路径</Rule>
+          <Rule>文件检索场景（用户要求查找/搜索文件）：必须调用file_read或search_web工具，禁止直接回复"找不到"</Rule>
+        </ToolSelectionRules>
+        <MandatoryPreActionRules>
+          <Rule priority="critical" intent="file_query">
+            当用户意图为文件查询（查找/搜索/定位文件）时，ReActEngine必须先执行以下步骤：
+            Step 1: 调用MemoryAccessor从L4检索相关历史/索引信息；
+            Step 2: 调用ToolCaller执行find/index工具搜索目标文件；
+            仅当上述两步均返回空结果后，才允许返回"未找到"类回复。禁止在步骤1或步骤2执行前直接返回not_found。
+          </Rule>
+          <Note>此规则防止ReActEngine在未尝试检索的情况下直接降级为追问用户，确保文件查询类请求充分使用L4记忆检索和L5工具搜索能力</Note>
+        </MandatoryPreActionRules>
+      </Component>
+
+      <Component name="TaskPlanner">
+        <Description>任务规划器，将复杂请求拆解为子任务</Description>
+        <Method>plan(intent: Intent, context: SessionContext) -&gt; TaskGraph</Method>
+        <TaskTypes>
+          <Type>atomic - 原子任务，可直接执行</Type>
+          <Type>composite - 复合任务，需要拆解</Type>
+          <Type>conditional - 条件任务，根据结果分支</Type>
+        </TaskTypes>
+        <PlanCompletenessRules>
+          <Rule priority="critical">生成的 plan 必须覆盖到最终输出交付步骤，禁止以中间态终止</Rule>
+          <Rule>计划必须包含 ToolCaller 实际执行工具调用的步骤（如需要工具）</Rule>
+          <Rule>工具返回后必须有面向用户的完成确认步骤，复述关键结果字段</Rule>
+          <Rule>禁止以"已模拟""需要先获取数据"等中间态作为终态输出</Rule>
+        </PlanCompletenessRules>
+      </Component>
+
+      <Component name="LLMManager">
+        <Description>LLM调用管理器，封装大模型交互</Description>
+        <Providers>
+          <Provider>OpenAI GPT-4/GPT-3.5</Provider>
+          <Provider>Anthropic Claude</Provider>
+          <Provider>本地模型（Ollama）</Provider>
+        </Providers>
+        <Methods>
+          <Method>complete(messages: List, tools: List) -&gt; LLMResponse</Method>
+          <Method>stream(messages: List) -&gt; Iterator[str]</Method>
+        </Methods>
+        <Configuration>
+          <MaxTokens>4096</MaxTokens>
+          <Temperature>0.7</Temperature>
+          <Timeout>30秒</Timeout>
+        </Configuration>
+      </Component>
+
+      <Component name="ToolCaller">
+        <Description>工具调用器，与L5交互执行工具，负责按顺序调用L5内部组件完成工具执行</Description>
+        <Interface>调用L5.execute(action_name, params)</Interface>
+        <Methods>
+          <Method>call_tool(action: AgentAction) -&gt; Observation</Method>
+          <Method>format_tools_for_llm() -&gt; List[dict]</Method>
+        </Methods>
+        <ExecutionChain>
+          <Step order="1">ToolRegistry.get(name) 查找工具定义</Step>
+          <Step order="2">ParameterValidator.validate(params, schema) 验证参数合法性</Step>
+          <Step order="3">PermissionManager.check_permission(user_id, tool_name) 检查用户权限</Step>
+          <Step order="4">ConfirmationManager.needs_confirmation(action, permissions) 判断是否需要二次确认</Step>
+          <Step order="5">ToolExecutor.execute(tool, params) 执行工具（如为代码/命令类型则委派至L6）</Step>
+          <Step order="6">ResultFormatter.format(result) 格式化执行结果</Step>
+          <Note>ToolCaller不直接实例化上述组件，而是通过L5统一接口调用，此处列出的是L5内部的隐式执行顺序</Note>
+        </ExecutionChain>
+      </Component>
+
+      <Component name="MemoryAccessor">
+        <Description>记忆访问器，从L4检索相关知识</Description>
+        <Interface>调用L4.search(query, top_k)</Interface>
+        <Methods>
+          <Method>retrieve_relevant(query: str, top_k: int) -&gt; List[str]</Method>
+          <Method>enhance_context(context: SessionContext) -&gt; EnhancedContext</Method>
+        </Methods>
+      </Component>
+
+      <Component name="ErrorTranslator">
+        <Description>错误转译器，将L5返回的业务级技术错误转译为用户友好的中文提示，并通过L2回流至L1规范化返回</Description>
+        <Scope>
+          <Item>仅处理业务语义错误：工具执行失败、文件不存在、权限不足、参数非法等</Item>
+          <Item>禁止处理传输/协议级错误（连接超时、JSON解析失败）——此类错误由 L1.ErrorHandler 处理</Item>
+        </Scope>
+        <Responsibilities>
+          <Item>仅当Observation.status为error时触发</Item>
+          <Item>将技术异常（如502 Bad Gateway、ToolNotFoundError）转译为自然语言</Item>
+          <Item>保留原始错误信息供调试，但向用户返回通俗解释</Item>
+          <Item>区分可恢复错误（重试）与不可恢复错误（终止）</Item>
+          <Item>转译后的错误信息通过L2回流至L1.ErrorHandler，由L1统一格式返回给用户</Item>
+        </Responsibilities>
+        <InputContract>
+          <Source component="ToolCaller">ToolCaller执行工具失败时产生的异常（ToolExecutionError、TimeoutError等）</Source>
+          <Source component="LLMManager">LLM调用失败时产生的异常（LLMError、RateLimitError等）</Source>
+          <Source component="MemoryAccessor">L4检索失败时产生的异常（VectorStoreError、EmbeddingError等）</Source>
+          <TriggerCondition>Observation.status == "error" 或 ReAct循环中捕获到任何业务级异常</TriggerCondition>
+          <Note>ErrorTranslator必须订阅ToolCaller和LLMManager的异常事件，禁止在异常未经过ErrorTranslator转译前直接返回给用户</Note>
+        </InputContract>
+        <ErrorReturnPath>
+          <Step>L3.ErrorTranslator 转译错误</Step>
+          <Step>L2 接收转译后的错误文本，注入到响应体</Step>
+          <Step>L1.ErrorHandler 规范化输出格式（HTTP状态码、Telegram消息格式等）</Step>
+          <Step>最终用户收到友好错误提示</Step>
+          <Note>ErrorTranslator与ErrorHandler的分工：ErrorTranslator负责业务语义转译（中文），ErrorHandler负责协议级格式化（状态码、消息结构）</Note>
+        </ErrorReturnPath>
+        <Methods>
+          <Method>translate(observation: Observation) -&gt; str</Method>
+        </Methods>
+        <TranslationExamples>
+          <Example>
+            <Original>502 Bad Gateway</Original>
+            <Translated>外部服务暂时不可用，请稍后重试</Translated>
+          </Example>
+          <Example>
+            <Original>ToolNotFoundError: calculator</Original>
+            <Translated>系统暂时不支持该工具，请尝试其他方式</Translated>
+          </Example>
+          <Example>
+            <Original>FileNotFoundError: 指定路径不存在</Original>
+            <Translated>找不到该文件，请确认路径是否正确或文件是否已移动</Translated>
+          </Example>
+          <Example>
+            <Original>FileExistsError: 目标文件已存在</Original>
+            <Translated>该位置已有同名文件，请选择覆盖、重命名或保存到其他位置</Translated>
+          </Example>
+        </TranslationExamples>
+        <ErrorSchema>
+          <Requirement>ToolCaller抛出的error对象必须包含error_type和source字段，ErrorTranslator根据这两个字段进行精准转译，禁止回退到通用知识回答</Requirement>
+          <Fields>
+            <Field name="error_type" required="true"><Values>ToolExecutionError, NetworkError, PermissionError, TimeoutError, ValidationError, FileNotFoundError, FileExistsError</Values></Field>
+            <Field name="source" required="true"><Values>ToolCaller, LLMManager, MemoryAccessor, L5.ToolExecutor, L6.SandboxManager</Values></Field>
+            <Field name="message" required="true"><Description>原始错误信息（供调试）</Description></Field>
+          </Fields>
+          <Rule>遇到工具异常必须原样转述错误类别，不得用LLM常识回答替代（如遇到网络错误不得回复"红烧肉做法"）</Rule>
+        </ErrorSchema>
+      </Component>
+    </Components>
+
+    <DataFlow>
+      <Step order="1">接收SessionContext（来自L2）</Step>
+      <Step order="2" guard="true">SecurityGuard对请求进行安全判断（正常/敏感/恶意/高危）—— L3入口强制守卫，必须先于ReActEngine/TaskPlanner执行</Step>
+      <Step order="2a" condition="恶意/高危请求">直接拒绝并返回友好提示</Step>
+      <Step order="2b" condition="敏感请求">标记为需二次确认，路由到ConfirmationManager</Step>
+      <Step order="3">MemoryAccessor从L4检索相关知识</Step>
+      <Step order="3.1" condition="RAG检索">MemoryAccessor → TextChunker → EmbeddingService → VectorStore → IndexManager → CacheManager</Step>
+      <Step order="4">TaskPlanner根据上下文规划任务</Step>
+      <Step order="5">ReActEngine启动循环，LLMManager生成Thought</Step>
+      <Step order="6">决策：调用工具或直接回复</Step>
+      <Step order="7a" condition="调用工具">ToolCaller调用L5（顺序：ToolRegistry → ParameterValidator → PermissionManager → ConfirmationManager → ToolExecutor → L6）</Step>
+      <Step order="8a">接收Observation（来自L5）</Step>
+      <Step order="8a.1" condition="Observation.status为error">ErrorTranslator转译错误信息为用户友好提示</Step>
+      <Step order="8a.2" condition="ErrorTranslator处理后">错误信息经L2回流至L1.ErrorHandler规范化返回</Step>
+      <Step order="9a">回到Step 5（继续ReAct循环）</Step>
+      <Step order="7b" condition="直接回复">生成最终回复</Step>
+      <Step order="8b">返回回复文本给L2</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="run">
+      <Signature>
+        <Input>
+          <Parameter name="context" type="SessionContext" required="true">
+            <Description>来自L2的会话上下文</Description>
+          </Parameter>
+          <Parameter name="observation" type="Observation" required="false">
+            <Description>执行观察结果（ReAct循环中来自L5的反馈）</Description>
+          </Parameter>
+        </Input>
+
+        <Output>
+          <Variant condition="最终回复" type="str">
+            <Description>返回给用户的最终回复文本</Description>
+            <Example>"根据计算，1+1=2"</Example>
+          </Variant>
+
+          <Variant condition="内部流转" type="AgentAction">
+            <Description>发送给L5的工具调用指令</Description>
+            <Fields>
+              <Field name="action" type="str" required="true">
+                <Description>工具名称</Description>
+                <ValidValues>python_repl, search_web, file_read, file_write</ValidValues>
+              </Field>
+              <Field name="action_input" type="dict" required="true">
+                <Description>工具参数</Description>
+                <Example>{"code": "print('hello')"}</Example>
+              </Field>
+              <Field name="thought" type="str" required="false">
+                <Description>LLM的思考过程</Description>
+              </Field>
+            </Fields>
+          </Variant>
+        </Output>
+
+        <Exceptions>
+          <Exception name="LLMError">
+            <Description>大模型调用失败</Description>
+            <ErrorCode>503</ErrorCode>
+            <RetryPolicy>自动重试3次，指数退避</RetryPolicy>
+          </Exception>
+          <Exception name="MaxIterationsExceeded">
+            <Description>达到最大ReAct迭代次数仍未得到答案</Description>
+            <ErrorCode>422</ErrorCode>
+          </Exception>
+          <Exception name="ToolExecutionError">
+            <Description>工具调用失败（由L5返回）</Description>
+            <ErrorCode>500</ErrorCode>
+          </Exception>
+        </Exceptions>
+      </Signature>
+    </PrimaryMethod>
+
+    <SecondaryMethod name="format_response">
+      <Signature>
+        <Input>
+          <Parameter name="content" type="str" required="true">
+            <Description>原始回复内容</Description>
+          </Parameter>
+          <Parameter name="include_thoughts" type="bool" required="false" default="false">
+            <Description>是否包含思考过程</Description>
+          </Parameter>
+        </Input>
+
+        <Output type="str">
+          <Description>格式化后的回复</Description>
+        </Output>
+      </Signature>
+    </SecondaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 工具决策规则 ==================== -->
+  <ToolDecisionRules>
+    <Rule name="calculator">
+      <Trigger>用户请求涉及数学计算</Trigger>
+      <Keywords>计算、等于、+、-、*、/、平方、平方根、求和、平均值</Keywords>
+      <PermissionRequired>none</PermissionRequired>
+    </Rule>
+
+    <Rule name="file_write">
+      <Trigger>需要创建或写入文件</Trigger>
+      <Keywords>创建文件、写入文件、保存内容、新建文档、保存到</Keywords>
+      <PermissionRequired>file_write</PermissionRequired>
+      <ImportantNote>
+        路径转换规则（必须严格遵守）：
+        用户友好的路径 → 沙盒安全路径
+        - "桌面/xxx" → "documents/desktop/xxx"
+        - "下载/xxx" → "documents/downloads/xxx"
+        - "文档/xxx" → "documents/xxx"
+        - 仅文件名 → "documents/文件名"
+      </ImportantNote>
+      <PathMappingExamples>
+        <Example>
+          <UserInput>在桌面建个文件</UserInput>
+          <ConvertedPath>documents/desktop/文件.txt</ConvertedPath>
+        </Example>
+        <Example>
+          <UserInput>保存到下载文件夹</UserInput>
+          <ConvertedPath>documents/downloads/文件.txt</ConvertedPath>
+        </Example>
+        <Example>
+          <UserInput>创建笔记.txt</UserInput>
+          <ConvertedPath>documents/笔记.txt</ConvertedPath>
+        </Example>
+      </PathMappingExamples>
+    </Rule>
+
+    <Rule name="file_read">
+      <Trigger>用户提及读取文件</Trigger>
+      <Keywords>读取文件、打开文件、查看文件内容、读一下</Keywords>
+      <PermissionRequired>file_read</PermissionRequired>
+      <Note>同样遵循上述路径转换规则</Note>
+    </Rule>
+
+    <Rule name="python_repl">
+      <Trigger>需要执行Python代码</Trigger>
+      <Keywords>写代码、运行Python、计算Fibonacci、排序算法、执行脚本</Keywords>
+      <PermissionRequired>execute_code</PermissionRequired>
+      <Alternative>
+        如果用户没有execute_code权限但请求涉及文件操作，
+        应尝试使用file_write/file_read替代
+      </Alternative>
+    </Rule>
+
+    <Rule name="search_web">
+      <Trigger>需要最新信息</Trigger>
+      <Keywords>搜索、查一下、最新的、今天的新闻、天气、股价</Keywords>
+      <PermissionRequired>web_access</PermissionRequired>
+    </Rule>
+  </ToolDecisionRules>
+
+  <!-- ==================== 4. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Layer id="L2">控制网关层 (Control Gateway)</Layer>
+      <Relation>被调用（接收SessionContext）</Relation>
+      <Method>L2调用L3.run(context: SessionContext)</Method>
+      <DataFormat>SessionContext对象</DataFormat>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="L2">控制网关层 (Control Gateway)</Layer>
+      <Relation>回调（返回最终回复）</Relation>
+      <Method>返回str给L2.send_response()</Method>
+      <DataFormat>字符串</DataFormat>
+    </Downstream>
+
+    <ExternalDependencies>
+      <Dependency id="L4">
+        <Layer>记忆与知识层 (Memory &amp; Knowledge)</Layer>
+        <Interface>MemoryInterface</Interface>
+        <Usage>MemoryAccessor调用L4.search()检索知识</Usage>
+        <CouplingType>依赖注入（接口抽象）</CouplingType>
+        <CallEdges>
+          <Edge from="MemoryAccessor" to="VectorStore" />
+          <Edge from="MemoryAccessor" to="MemoryStore" />
+          <Edge from="MemoryAccessor" to="CacheManager" />
+        </CallEdges>
+      </Dependency>
+
+      <Dependency id="L5">
+        <Layer>能力抽象层 (Tools &amp; Capabilities)</Layer>
+        <Interface>ToolsInterface</Interface>
+        <Usage>ToolCaller调用L5.execute()执行工具</Usage>
+        <CouplingType>依赖注入（接口抽象）</CouplingType>
+      </Dependency>
+
+      <Dependency id="External">
+        <Layer>外部LLM服务</Layer>
+        <Usage>LLMManager调用OpenAI/Claude API</Usage>
+        <CouplingType>外部服务调用</CouplingType>
+      </Dependency>
+    </ExternalDependencies>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>models.SessionContext - 输入数据结构</Dependency>
+        <Dependency>models.AgentAction - 工具调用指令</Dependency>
+        <Dependency>models.Observation - 工具执行结果</Dependency>
+        <Dependency>interfaces.MemoryInterface - L4接口</Dependency>
+        <Dependency>interfaces.ToolsInterface - L5接口</Dependency>
+      </Internal>
+      <External>
+        <Dependency>openai - OpenAI API客户端</Dependency>
+        <Dependency>anthropic - Anthropic API客户端</Dependency>
+      </External>
+    </Dependencies>
+
+    <CouplingStrength>中等耦合</CouplingStrength>
+    <CouplingType>依赖注入（通过接口与L4、L5通信）</CouplingType>
+
+    <Note>
+      L3是系统的智能核心，通过依赖注入解耦与L4、L5的关系。L3不直接实例化L4/L5，
+      而是通过构造函数接收接口实现。这使得L3可以独立测试，也便于替换底层实现。
+    </Note>
+  </Coupling>
+  
+  
+</Layer>

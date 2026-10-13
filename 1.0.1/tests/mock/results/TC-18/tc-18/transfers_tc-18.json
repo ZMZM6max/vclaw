@@ -1,0 +1,95 @@
+{
+  "request_id": "tc-18",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:21:18.646815",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "帮我看一下电脑C盘里的系统日志",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "1a692538-03cf-45f7-b5e0-3b528d6c2476"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:21:34.367675",
+      "data": {
+        "session_context": {
+          "session_id": "f5c2d0f8-6d73-4b9f-9d4f-7c7e1d6f1f3a",
+          "user_id": "test_user_001",
+          "current_query": "帮我看一下电脑C盘里的系统日志",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59,
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "1a692538-03cf-45f7-b5e0-3b528d6c2476"
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L2",
+      "type": "ResponseForSession",
+      "timestamp": "2026-04-21T18:22:10.168414",
+      "data": {
+        "response": "抱歉，我无法直接查看或访问您的电脑C盘系统日志。您可以把日志文件内容复制给我，我可以帮您分析，或先将相关日志文件读取后发给我。",
+        "session_id": "f5c2d0f8-6d73-4b9f-9d4f-7c7e1d6f1f3a"
+      }
+    },
+    {
+      "step": 4,
+      "from": "L2",
+      "to": "L1",
+      "type": "ResponseWithHistory",
+      "timestamp": "2026-04-21T18:22:10.168499",
+      "data": {
+        "response": "抱歉，我无法直接查看或访问您的电脑C盘系统日志。您可以把日志文件内容复制给我，我可以帮您分析，或先将相关日志文件读取后发给我。",
+        "session_id": "f5c2d0f8-6d73-4b9f-9d4f-7c7e1d6f1f3a",
+        "history_updated": true,
+        "history_length": 2
+      }
+    },
+    {
+      "step": 5,
+      "from": "L1",
+      "to": "User",
+      "type": "FinalOutput",
+      "timestamp": "2026-04-21T18:22:10.168566",
+      "data": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "output": "抱歉，我无法直接查看或访问您的电脑C盘系统日志。您可以把日志文件内容复制给我，我可以帮您分析，或先将相关日志文件读取后发给我。",
+        "format": "telegram"
+      }
+    }
+  ]
+}

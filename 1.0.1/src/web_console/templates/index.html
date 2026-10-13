@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VClaw Web Test Console</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>VClaw Test Console</h1>
+        <div class="subtitle">L1-L6 六层架构测试平台</div>
+      </div>
+      <ul class="nav-menu">
+        <li data-panel="dashboard" class="active"><span class="nav-icon">🏠</span> 总览</li>
+        <li data-panel="l1"><span class="nav-icon">L1</span> 用户交互层</li>
+        <li data-panel="l2"><span class="nav-icon">L2</span> 控制网关层</li>
+        <li data-panel="l3"><span class="nav-icon">L3</span> 逻辑编排层</li>
+        <li data-panel="l4"><span class="nav-icon">L4</span> 记忆知识层</li>
+        <li data-panel="l5"><span class="nav-icon">L5</span> 工具能力层</li>
+        <li data-panel="l6"><span class="nav-icon">L6</span> 环境执行层</li>
+        <li data-panel="e2e"><span class="nav-icon">🔄</span> E2E 对话</li>
+      </ul>
+      <div class="sidebar-footer">
+        <div><span id="llm-status-dot" class="status-dot warn"></span>LLM: <span id="llm-status-text">检测中...</span></div>
+        <div style="margin-top:6px"><span id="docker-status-dot" class="status-dot warn"></span>Docker: <span id="docker-status-text">检测中...</span></div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="topbar">
+        <h2 id="page-title">总览 Dashboard</h2>
+        <div class="topbar-actions">
+          <button class="btn" onclick="loadConfig()">🔄 刷新状态</button>
+          <button class="btn btn-primary" onclick="scrollToE2E()">🚀 开始 E2E 测试</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <!-- Dashboard -->
+        <div id="panel-dashboard" class="panel active">
+          <div class="panel-title">系统状态总览</div>
+          <div class="panel-desc">检查各层依赖可用性与配置信息</div>
+
+          <div class="status-grid">
+            <div class="status-card" id="card-llm">
+              <div class="icon">🤖</div>
+              <div class="info">
+                <div class="label">LLM 可用性</div>
+                <div class="value" id="card-llm-value">检测中...</div>
+              </div>
+            </div>
+            <div class="status-card" id="card-docker">
+              <div class="icon">🐳</div>
+              <div class="info">
+                <div class="label">Docker 可用性</div>
+                <div class="value" id="card-docker-value">检测中...</div>
+              </div>
+            </div>
+            <div class="status-card" id="card-api">
+              <div class="icon">🔗</div>
+              <div class="info">
+                <div class="label">API Base URL</div>
+                <div class="value" id="card-api-value">-</div>
+              </div>
+            </div>
+            <div class="status-card" id="card-model">
+              <div class="icon">📦</div>
+              <div class="info">
+                <div class="label">测试模型</div>
+                <div class="value" id="card-model-value">-</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>可用工具列表</h3>
+            <div id="tools-list" class="preset-tags">
+              <span class="empty-hint">加载中...</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>使用说明</h3>
+            <ul style="font-size:13px;line-height:1.8;color:#555;padding-left:18px">
+              <li>左侧导航可切换到各层独立测试面板</li>
+              <li><strong>E2E 对话</strong> 模拟完整请求链路：L1→L2→L3→L4/L5→L6</li>
+              <li>L3 测试需要配置 OPENAI_API_KEY 或 ANTHROPIC_API_KEY</li>
+              <li>L6 代码执行需要本地 Docker 环境</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- L1 -->
+        <div id="panel-l1" class="panel">
+          <div class="panel-title">L1 用户交互层测试</div>
+          <div class="panel-desc">适配器解析与数据校验</div>
+
+          <div class="card">
+            <h3>Adapter 解析测试</h3>
+            <div class="preset-tags">
+              <span class="preset-tag" onclick="setL1Channel('telegram')">Telegram</span>
+              <span class="preset-tag" onclick="setL1Channel('webhook')">Webhook</span>
+              <span class="preset-tag" onclick="setL1Channel('websocket')">WebSocket</span>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Channel</label>
+                <select id="l1-channel">
+                  <option value="telegram">telegram</option>
+                  <option value="webhook">webhook</option>
+                  <option value="websocket">websocket</option>
+                  <option value="web">web</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Raw Data (JSON)</label>
+                <textarea id="l1-raw">{"user_id": "u1", "message": {"text": "hello"}}</textarea>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL1Adapter()">▶ 运行 Adapter 测试</button>
+            <div id="l1-adapter-result" class="result-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Validator 校验测试</h3>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Event Dict (JSON)</label>
+                <textarea id="l1-event">{"channel": "webhook", "user_id": "u1", "content": "hello"}</textarea>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL1Validator()">▶ 运行 Validator 测试</button>
+            <div id="l1-validator-result" class="result-box"></div>
+          </div>
+        </div>
+
+        <!-- L2 -->
+        <div id="panel-l2" class="panel">
+          <div class="panel-title">L2 控制网关层测试</div>
+          <div class="panel-desc">限流与会话管理</div>
+
+          <div class="card">
+            <h3>Rate Limit 限流测试</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>User ID</label>
+                <input type="text" id="l2-user" value="u1">
+              </div>
+              <div class="form-group">
+                <label>IP</label>
+                <input type="text" id="l2-ip" value="127.0.0.1">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL2RateLimit()">▶ 运行限流测试</button>
+            <div id="l2-rate-result" class="result-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Session 会话测试</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>User ID</label>
+                <input type="text" id="l2-session-user" value="u1">
+              </div>
+              <div class="form-group">
+                <label>Content</label>
+                <input type="text" id="l2-session-content" value="hello">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL2Session()">▶ 运行会话测试</button>
+            <div id="l2-session-result" class="result-box"></div>
+          </div>
+        </div>
+
+        <!-- L3 -->
+        <div id="panel-l3" class="panel">
+          <div class="panel-title">L3 逻辑编排层测试</div>
+          <div class="panel-desc">ReAct 推理与安全判断（需要 LLM）</div>
+
+          <div class="card">
+            <h3>ReAct 推理测试</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>User ID</label>
+                <input type="text" id="l3-react-user" value="test_user">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Query</label>
+                <input type="text" id="l3-react-query" value="What is 2+2?">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>History (JSON array, optional)</label>
+                <textarea id="l3-react-history">[]</textarea>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL3React()">▶ 运行 ReAct 测试</button>
+            <div id="l3-react-result" class="result-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Security 安全判断测试</h3>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Query</label>
+                <input type="text" id="l3-sec-query" value="Delete all system files">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL3Security()">▶ 运行安全判断</button>
+            <div id="l3-sec-result" class="result-box"></div>
+          </div>
+        </div>
+
+        <!-- L4 -->
+        <div id="panel-l4" class="panel">
+          <div class="panel-title">L4 记忆与知识层测试</div>
+          <div class="panel-desc">对话存储与向量检索</div>
+
+          <div class="card">
+            <h3>Memory 存储/检索测试</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Session ID</label>
+                <input type="text" id="l4-session" value="test-session-001">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Messages (JSON)</label>
+                <textarea id="l4-messages">[
+  {"role": "user", "content": "Hello"},
+  {"role": "assistant", "content": "Hi!"}
+]</textarea>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL4Memory()">▶ 运行 Memory 测试</button>
+            <div id="l4-memory-result" class="result-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Search 向量搜索测试</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Query</label>
+                <input type="text" id="l4-query" value="AI agent system">
+              </div>
+              <div class="form-group">
+                <label>Top K</label>
+                <input type="number" id="l4-topk" value="3">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL4Search()">▶ 运行 Search 测试</button>
+            <div id="l4-search-result" class="result-box"></div>
+          </div>
+        </div>
+
+        <!-- L5 -->
+        <div id="panel-l5" class="panel">
+          <div class="panel-title">L5 工具与能力层测试</div>
+          <div class="panel-desc">工具调用与 Bash 风险分析</div>
+
+          <div class="card">
+            <h3>Tool 工具调用测试</h3>
+            <div class="preset-tags">
+              <span class="preset-tag" onclick="setL5Tool('calculator','{\"expression\": \"15*23\"}')">calculator</span>
+              <span class="preset-tag" onclick="setL5Tool('file_reader','{\"path\": \"documents/example.txt\"}')">file_reader</span>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Action</label>
+                <input type="text" id="l5-action" value="calculator">
+              </div>
+              <div class="form-group">
+                <label>Params (JSON)</label>
+                <input type="text" id="l5-params" value='{"expression": "1+1"}'>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL5Tool()">▶ 运行 Tool 测试</button>
+            <div id="l5-tool-result" class="result-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Bash Analyzer 风险分析</h3>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Command</label>
+                <input type="text" id="l5-bash" value="ls -la">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL5Bash()">▶ 分析 Bash 命令</button>
+            <div id="l5-bash-result" class="result-box"></div>
+          </div>
+        </div>
+
+        <!-- L6 -->
+        <div id="panel-l6" class="panel">
+          <div class="panel-title">L6 环境执行层测试</div>
+          <div class="panel-desc">Docker 沙箱代码执行</div>
+
+          <div class="card">
+            <h3>Runtime 代码执行测试</h3>
+            <div class="preset-tags">
+              <span class="preset-tag" onclick="setL6Code('python','print(\"Hello from Python\")')">Python</span>
+              <span class="preset-tag" onclick="setL6Code('javascript','console.log(\"Hello from JS\")')">JavaScript</span>
+              <span class="preset-tag" onclick="setL6Code('bash','echo Hello from Bash')">Bash</span>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Language</label>
+                <select id="l6-lang">
+                  <option value="python">python</option>
+                  <option value="javascript">javascript</option>
+                  <option value="bash">bash</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Timeout (s)</label>
+                <input type="number" id="l6-timeout" value="30">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Code</label>
+                <textarea id="l6-code">print('ok')</textarea>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="runL6Runtime()">▶ 运行代码</button>
+            <div id="l6-runtime-result" class="result-box"></div>
+          </div>
+        </div>
+
+        <!-- E2E -->
+        <div id="panel-e2e" class="panel">
+          <div class="panel-title">E2E 端到端对话测试</div>
+          <div class="panel-desc">模拟完整链路：L1 → L2 → L3 → L4/L5 → L6</div>
+
+          <div class="card">
+            <h3>对话窗口</h3>
+            <div class="preset-tags">
+              <span class="preset-tag" onclick="setE2E('计算15乘以23')">计算15乘以23</span>
+              <span class="preset-tag" onclick="setE2E('2+2等于多少')">2+2等于多少</span>
+              <span class="preset-tag" onclick="setE2E('搜索AI agent相关资料')">搜索AI agent</span>
+            </div>
+            <div id="chat-messages" class="chat-messages">
+              <div class="empty-hint">在下方输入消息开始 E2E 测试对话</div>
+            </div>
+            <div class="chat-controls">
+              <input type="text" id="e2e-input" placeholder="输入消息..." onkeydown="if(event.key==='Enter') sendE2E()">
+              <button class="btn btn-primary" onclick="sendE2E()">发送</button>
+              <button class="btn" onclick="resetE2E()">重置会话</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>ReAct 执行详情</h3>
+            <div id="e2e-react-detail" class="result-box" style="max-height:400px">等待对话开始...</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

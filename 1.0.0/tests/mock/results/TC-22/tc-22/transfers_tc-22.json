@@ -1,0 +1,92 @@
+{
+  "request_id": "tc-22",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:23:33.550598",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "把那个1G的视频文件移动到桌面",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "342e148a-47f8-4f98-aa8e-117ae3fa236c"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:23:47.431545",
+      "data": {
+        "session_context": {
+          "session_id": "7d2e3a4f-1c5b-4f8a-9b6c-2a0a4c7e91d3",
+          "user_id": "test_user_001",
+          "current_query": "把那个1G的视频文件移动到桌面",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L2",
+      "type": "ResponseForSession",
+      "timestamp": "2026-04-21T18:23:55.478400",
+      "data": {
+        "response": "确定要移动这个1G的视频文件吗？这属于高危可恢复操作，可能会影响文件位置与原有访问路径。请先确认：\n1. 源文件完整路径\n2. 目标位置（桌面）\n3. 是否继续执行（确认/取消）",
+        "session_id": "7d2e3a4f-1c5b-4f8a-9b6c-2a0a4c7e91d3"
+      }
+    },
+    {
+      "step": 4,
+      "from": "L2",
+      "to": "L1",
+      "type": "ResponseWithHistory",
+      "timestamp": "2026-04-21T18:23:55.478546",
+      "data": {
+        "response": "确定要移动这个1G的视频文件吗？这属于高危可恢复操作，可能会影响文件位置与原有访问路径。请先确认：\n1. 源文件完整路径\n2. 目标位置（桌面）\n3. 是否继续执行（确认/取消）",
+        "session_id": "7d2e3a4f-1c5b-4f8a-9b6c-2a0a4c7e91d3",
+        "history_updated": true,
+        "history_length": 2
+      }
+    },
+    {
+      "step": 5,
+      "from": "L1",
+      "to": "User",
+      "type": "FinalOutput",
+      "timestamp": "2026-04-21T18:23:55.478604",
+      "data": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "output": "确定要移动这个1G的视频文件吗？这属于高危可恢复操作，可能会影响文件位置与原有访问路径。请先确认：\n1. 源文件完整路径\n2. 目标位置（桌面）\n3. 是否继续执行（确认/取消）",
+        "format": "telegram"
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "session_id": "67e34ae3-6e20-4a7c-80ed-d6682505ca3f",
+  "messages": [
+    {
+      "role": "user",
+      "content": "111"
+    },
+    {
+      "role": "assistant",
+      "content": "【模拟回复】已收到你的消息：111"
+    },
+    {
+      "role": "user",
+      "content": "222"
+    },
+    {
+      "role": "assistant",
+      "content": "【模拟回复】已收到你的消息：222"
+    }
+  ],
+  "updated_at": 1776171215.263966,
+  "message_count": 4
+}

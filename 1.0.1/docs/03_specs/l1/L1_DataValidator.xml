@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L1 Component: DataValidator
+  拆分自: L1_UserInteraction.xml
+  用途: 数据验证器，确保输入数据符合预期格式并具备基础安全防护
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L1_UserInteraction.xml
+  src/l1/docs/L1_UserInteraction.xml
+-->
+<Component id="L1.DataValidator" name="DataValidator" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>数据验证器，确保输入数据符合预期格式。提供 JSON Schema 风格的校验与基础注入攻击防护</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">必填字段存在性检查（channel, user_id, content）</Item>
+      <Item priority="critical">渠道白名单校验（telegram, websocket, webhook）</Item>
+      <Item priority="high">user_id 非空与长度限制检查（最大 256 字符）</Item>
+      <Item priority="high">content 非空与长度限制检查（最大 10KB）</Item>
+      <Item priority="high">内容注入攻击检测（XSS、模板注入、JSP/ASP 注入等）</Item>
+      <Item priority="medium">timestamp 有效性校验（1970-2100 范围内的 Unix 时间戳）</Item>
+    </Responsibilities>
+
+    <Configuration>
+      <Field name="REQUIRED_FIELDS" type="List[str]" value="[channel, user_id, content]"/>
+      <Field name="VALID_CHANNELS" type="Set[str]" value="{telegram, websocket, webhook}"/>
+      <Field name="MAX_USER_ID_LENGTH" type="int" value="256"/>
+      <Field name="MAX_CONTENT_LENGTH" type="int" value="10000"/>
+      <InjectionPatterns>
+        <Pattern description="XSS 脚本注入">&lt;script[^&gt;]*&gt;.*?&lt;/script&gt;</Pattern>
+        <Pattern description="JavaScript 伪协议">javascript:</Pattern>
+        <Pattern description="HTML 事件处理器">on\w+\s*=</Pattern>
+        <Pattern description="模板注入">\$\{.*\}</Pattern>
+        <Pattern description="JSP/ASP 注入">&lt;%.*%&gt;</Pattern>
+      </InjectionPatterns>
+    </Configuration>
+
+    <DataFlow>
+      <Step order="1">接收待验证数据（通常为 dict 或 StandardEvent.model_dump()）</Step>
+      <Step order="2">_validate_required_fields：检查 channel、user_id、content 是否存在且非空（不为 None，不为空字符串）</Step>
+      <Step order="3">_validate_channel：检查 channel 是否在 VALID_CHANNELS 白名单中</Step>
+      <Step order="4">_validate_user_id：检查非空且长度不超过 256 字符</Step>
+      <Step order="5">_validate_content：检查非空、长度不超过 10KB、无注入攻击特征</Step>
+      <Step order="6" condition="数据中包含 timestamp 且值为真值">_validate_timestamp：检查为有效 Unix 时间戳</Step>
+      <Step order="7">全部通过返回 True；任一失败抛出 ValidationError</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="validate">
+      <Signature>validate(data: Dict) -&gt; bool</Signature>
+      <Description>对原始输入数据执行完整性校验与安全性检查</Description>
+      <Input>
+        <Parameter name="data" type="dict" required="true">
+          <Description>待验证的数据字典，通常来自 EventNormalizer 解析后的结果</Description>
+          <Constraints>必须包含 channel, user_id, content，且均不为 None 或空字符串；timestamp 为可选</Constraints>
+        </Parameter>
+      </Input>
+      <Output type="bool">
+        <Description>验证通过返回 True</Description>
+      </Output>
+      <Exceptions>
+        <Exception name="ValidationError">
+          <Description>验证失败，message 包含具体失败原因</Description>
+          <ErrorCode>400</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </PrimaryMethod>
+
+    <Method name="_validate_required_fields">
+      <Signature>_validate_required_fields(data: Dict) -&gt; None</Signature>
+      <Description>内部方法：检查所有必填字段存在且非空</Description>
+    </Method>
+
+    <Method name="_validate_channel">
+      <Signature>_validate_channel(channel: Any) -&gt; None</Signature>
+      <Description>内部方法：检查渠道值在白名单中</Description>
+    </Method>
+
+    <Method name="_validate_user_id">
+      <Signature>_validate_user_id(user_id: Any) -&gt; None</Signature>
+      <Description>内部方法：检查 user_id 非空且长度合规</Description>
+    </Method>
+
+    <Method name="_validate_content">
+      <Signature>_validate_content(content: Any) -&gt; None</Signature>
+      <Description>内部方法：检查 content 非空、长度合规、无注入特征</Description>
+    </Method>
+
+    <Method name="_validate_timestamp">
+      <Signature>_validate_timestamp(timestamp: Any) -&gt; None</Signature>
+      <Description>内部方法：检查为有效 Unix 时间戳（1970-2100）</Description>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L1.UserInteraction">L1 主入口</Component>
+      <Relation>被调用方（_process_payload 中调用 validate(event.model_dump())）</Relation>
+      <DataFormat>dict（StandardEvent 经 model_dump() 后的字典）</DataFormat>
+    </Upstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>core.exceptions.ValidationError - 验证失败异常定义</Dependency>
+      </Internal>
+      <External>
+        <Dependency>re - Python 正则表达式库（用于编译注入检测模式）</Dependency>
+      </External>
+    </Dependencies>
+
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>数据耦合（仅接收 dict 输入，抛出异常，不依赖其他 L1 组件）</CouplingType>
+  </Coupling>
+
+</Component>

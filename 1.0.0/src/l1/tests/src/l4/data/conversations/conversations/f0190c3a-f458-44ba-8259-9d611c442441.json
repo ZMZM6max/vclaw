@@ -1,0 +1,15 @@
+{
+  "session_id": "f0190c3a-f458-44ba-8259-9d611c442441",
+  "messages": [
+    {
+      "role": "user",
+      "content": "一加一等于几"
+    },
+    {
+      "role": "assistant",
+      "content": "【模拟回复】已收到你的消息：一加一等于几"
+    }
+  ],
+  "updated_at": 1776240650.781802,
+  "message_count": 2
+}

@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L2 Component: SessionManager (L2层)
+  拆分自: L2_ControlGateway.xml
+  用途: 会话生命周期管理器，负责 session_id 的创建、获取、更新和过期管理
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L2_ControlGateway.xml
+  src/l2/docs/L2_ControlGateway.xml
+-->
+<Component id="L2.SessionManager" name="SessionManager" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>会话生命周期管理器（L2层），负责 session_id 的创建、获取、更新和过期管理。user_id → session_id 的映射由 L1.SessionManager 维护</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">创建新会话（生成 UUID，初始化会话元数据）</Item>
+      <Item priority="critical">获取现有会话（先查内存，miss 后回查 L4 并回填缓存）</Item>
+      <Item priority="critical">处理用户显式新建会话请求（/new 等命令触发双删旧会话）</Item>
+      <Item priority="high">会话过期清理（每 100 次创建新会话触发一次批量清理）</Item>
+      <Item priority="high">支持可选的 L4 持久化（内存缓存 + L4 双写双删）</Item>
+      <Item priority="medium">禁止维护 user_id 映射表——此类职责属于 L1.SessionManager</Item>
+    </Responsibilities>
+
+    <Boundary>
+      <L1Scope>user_id → session_id 映射注入与透传（L1.SessionManager）</L1Scope>
+      <L2Scope>session_id → SessionContext 生命周期管理（创建、获取、更新、过期）</L2Scope>
+      <Note>L2.SessionManager 不维护 user_id 映射表，仅从 L1 传入的 metadata 中读取 session_id</Note>
+    </Boundary>
+
+    <SessionConfig>
+      <TTL>3600秒（1小时）</TTL>
+      <Storage>内存（开发）/ Redis（生产）</Storage>
+      <CleanupInterval>每 100 次创建新会话</CleanupInterval>
+    </SessionConfig>
+
+    <DataStructure>
+      <Field name="sessions" type="Dict[str, Dict]">
+        <Description>内存中的会话存储</Description>
+        <Example>{"session-abc-456": {"user_id": "user_123", "created_at": 1234567890}}</Example>
+      </Field>
+      <Field name="session_max_age" type="int" value="3600">
+        <Description>会话最大存活时间（秒）</Description>
+      </Field>
+      <Field name="PREFERENCE_KEY_SESSION_META" type="str" value="l2_session_metadata">
+        <Description>存储到 L4 持久化时的 preference key</Description>
+      </Field>
+      <Field name="_request_count" type="int" value="0">
+        <Description>创建新会话计数器，达到 CleanupInterval 阈值时触发 _cleanup_expired_sessions</Description>
+      </Field>
+    </DataStructure>
+
+    <Behavior>
+      <Case name="existing_session">
+        <Condition>session_id 有效且未过期</Condition>
+        <Action>返回现有 session_id</Action>
+        <Note>先查内存，miss 时尝试从 L4 恢复并回填内存</Note>
+      </Case>
+      <Case name="new_user">
+        <Condition>session_id 为 None 或无效</Condition>
+        <Action>生成新 UUID，创建会话元数据，内存 + L4 双写</Action>
+      </Case>
+      <Case name="new_session_command">
+        <Condition>is_new_session_request=True 且 session_id 存在且存在于内存中</Condition>
+        <Action>删除内存中的旧会话 + L4 save None 双删，然后创建新会话</Action>
+        <Note>若 session_id 为 None 或不在内存中，跳过删除直接创建新会话</Note>
+      </Case>
+      <Case name="expired_session">
+        <Condition>会话存在但超过 session_max_age</Condition>
+        <Action>视为无效，创建新会话替换</Action>
+      </Case>
+    </Behavior>
+
+    <DataFlow>
+      <Step order="1">接收 StandardEvent（含 metadata.session_id 与 is_new_session_request）</Step>
+      <Step order="2" condition="is_new_session_request=True 且 session_id 在内存中">删除旧会话（内存 del + L4 save None）</Step>
+      <Step order="3" condition="session_id 存在">查内存 sessions，命中则检查是否过期</Step>
+      <Step order="4" condition="内存 miss 且 L4 可用">调用 _load_session_meta(user_id) 回查 L4，验证返回的 session_id 匹配后回填内存</Step>
+      <Step order="5" condition="session_id 有效且未过期">返回现有 session_id</Step>
+      <Step order="6" condition="session_id 为 None 或无效">生成新 UUID，创建会话元数据</Step>
+      <Step order="7">内存写入 sessions[new_session_id]</Step>
+      <Step order="8" condition="L4 可用">调用 _persist_session_meta 双写到 L4</Step>
+      <Step order="9" condition="创建新会话后">_request_count 递增，达到阈值时调用 _cleanup_expired_sessions</Step>
+      <Step order="10">返回 session_id</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="_get_or_create_session">
+      <Signature>_get_or_create_session(event: StandardEvent) -&gt; str</Signature>
+      <Description>获取现有会话或创建新会话。处理显式新建请求、内存缓存、L4 持久化与过期清理</Description>
+      <Input>
+        <Parameter name="event" type="StandardEvent" required="true">
+          <Description>来自 L1 的标准化事件，metadata 中需包含 session_id 与可选的 is_new_session_request</Description>
+        </Parameter>
+      </Input>
+      <Output type="str">
+        <Description>有效的 session_id（现有或新创建）</Description>
+      </Output>
+    </PrimaryMethod>
+
+    <SecondaryMethod name="_persist_session_meta">
+      <Signature>_persist_session_meta(user_id: str, meta: Optional[Dict]) -&gt; bool</Signature>
+      <Description>将会话元数据持久化到 L4。meta 为 None 时表示删除</Description>
+      <Input>
+        <Parameter name="user_id" type="str" required="true">
+          <Description>用户唯一标识</Description>
+        </Parameter>
+        <Parameter name="meta" type="dict" required="false">
+          <Description>会话元数据字典，或 None 表示删除</Description>
+        </Parameter>
+      </Input>
+      <Output type="bool">
+        <Description>持久化是否成功（无 memory 时返回 False）</Description>
+      </Output>
+    </SecondaryMethod>
+
+    <SecondaryMethod name="_load_session_meta">
+      <Signature>_load_session_meta(user_id: str) -&gt; Optional[Dict]</Signature>
+      <Description>从 L4 加载会话元数据，用于内存 miss 后的恢复</Description>
+      <Input>
+        <Parameter name="user_id" type="str" required="true">
+          <Description>用户唯一标识</Description>
+        </Parameter>
+      </Input>
+      <Output type="Optional[Dict]">
+        <Description>会话元数据字典，或 None</Description>
+      </Output>
+    </SecondaryMethod>
+
+    <SecondaryMethod name="_cleanup_expired_sessions">
+      <Signature>_cleanup_expired_sessions() -&gt; None</Signature>
+      <Description>批量清理内存中已过期的会话，并同步清理 L4</Description>
+    </SecondaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L2.ControlGateway">L2 主入口</Component>
+      <Relation>被调用方（process_event 中调用 _get_or_create_session）</Relation>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="L1">用户接入层</Layer>
+      <Relation>接收 L1 透传的 session_id 与 is_new_session_request</Relation>
+      <DataFormat>StandardEvent.metadata 中的字段</DataFormat>
+    </Downstream>
+
+    <Downstream>
+      <Layer id="L4">记忆与知识层</Layer>
+      <Relation>可选持久化（save_user_preference / load_user_preference）</Relation>
+      <DataFormat>dict 形式的会话元数据</DataFormat>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>core.models.StandardEvent - 输入数据结构</Dependency>
+        <Dependency>core.interfaces.MemoryInterface - 可选的 L4 持久化接口</Dependency>
+      </Internal>
+      <External>
+        <Dependency>uuid - 生成 session_id</Dependency>
+        <Dependency>time - 时间戳与过期检查</Dependency>
+      </External>
+    </Dependencies>
+
+    <CouplingStrength>中耦合</CouplingStrength>
+    <CouplingType>数据耦合（通过 StandardEvent.metadata 读取）+ 标记耦合（is_new_session_request）</CouplingType>
+
+    <Note>
+      L2.SessionManager 与 L1.SessionManager 是不同组件：L1 管"谁是谁"，L2 管"会话里有什么"。
+      L4 持久化为可选依赖，无 memory 时保持纯内存行为（向后兼容）。
+    </Note>
+  </Coupling>
+
+</Component>

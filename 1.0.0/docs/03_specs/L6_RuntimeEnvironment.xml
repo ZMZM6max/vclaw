@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L6: 环境执行层 (Runtime &amp; Environment)
+  创建时间: 2024
+  用途: 详细定义第六层的架构、接口、耦合和测试规范
+-->
+<Layer id="L6" name="RuntimeEnvironment" version="1.0">
+  
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>系统的物理世界，负责沙盒、容器、文件系统与本地OS调用</Purpose>
+    
+    <Responsibilities>
+      <Item priority="critical">代码执行（在隔离环境中运行代码）</Item>
+      <Item priority="critical">沙盒隔离（限制代码执行环境，防止恶意操作）</Item>
+      <Item priority="high">资源限制（CPU、内存、时间配额管理）</Item>
+      <Item priority="high">文件系统操作（在沙盒内读写文件）</Item>
+      <Item priority="medium">环境管理（Docker容器生命周期）</Item>
+      <Item priority="medium">网络隔离（控制沙盒网络访问权限）</Item>
+      <Item priority="low">执行日志记录（审计和调试）</Item>
+    </Responsibilities>
+    
+    <Components>
+      <Component name="SandboxManager">
+        <Description>沙盒管理器，管理隔离执行环境</Description>
+        <Implementations>
+          <Impl>DockerSandbox - 使用Docker容器隔离（推荐用于生产）</Impl>
+          <Impl>ProcessSandbox - 使用进程隔离（轻量级，开发测试用）</Impl>
+          <Impl>RestrictedPythonSandbox - 使用RestrictedPython解释器</Impl>
+        </Implementations>
+        <Methods>
+          <Method>create(environment_id: str, config: SandboxConfig) -&gt; Sandbox</Method>
+          <Method>destroy(environment_id: str) -&gt; bool</Method>
+          <Method>execute(sandbox: Sandbox, command: str, timeout: int) -&gt; ExecutionResult</Method>
+        </Methods>
+      </Component>
+      
+      <Component name="ResourceLimiter">
+        <Description>资源限制器，管理执行资源配额</Description>
+        <Limits>
+          <Limit type="cpu">1核（1000 millicores）</Limit>
+          <Limit type="memory">512MB</Limit>
+          <Limit type="time">30秒（可配置）</Limit>
+          <Limit type="disk">100MB</Limit>
+          <Limit type="network">关闭（可选开启）</Limit>
+        </Limits>
+        <Enforcement>
+          <Method>cgroups - Linux资源组</Method>
+          <Method>setrlimit - 系统调用限制</Method>
+          <Method>timeout - 执行超时</Method>
+          <Method>ulimit - 进程限制</Method>
+        </Enforcement>
+      </Component>
+      
+      <Component name="CodeExecutor">
+        <Description>代码执行器，实际运行代码逻辑</Description>
+        <SupportedLanguages>
+          <Language>
+            <Name>python</Name>
+            <Version>3.11</Version>
+            <Interpreter>cpython</Interpreter>
+          </Language>
+          <Language>
+            <Name>javascript</Name>
+            <Version>ES2022</Version>
+            <Interpreter>node</Interpreter>
+          </Language>
+          <Language>
+            <Name>bash</Name>
+            <Version>5.x</Version>
+            <Interpreter>bash</Interpreter>
+          </Language>
+        </SupportedLanguages>
+        
+        <ExecutionFlow>
+          <Step>1. 创建临时执行目录</Step>
+          <Step>2. 将代码写入临时文件</Step>
+          <Step>3. 启动沙盒环境</Step>
+          <Step>4. 在沙盒内执行代码</Step>
+          <Step>5. 捕获stdout/stderr</Step>
+          <Step>6. 返回执行结果</Step>
+          <Step>7. 清理临时文件</Step>
+        </ExecutionFlow>
+      </Component>
+      
+      <Component name="DockerController">
+        <Description>Docker控制器，管理容器生命周期</Description>
+        <Image>vclaw-runtime:latest</Image>
+        <Methods>
+          <Method>create_container(image: str, resources: dict) -&gt; Container</Method>
+          <Method>start_container(container_id: str) -&gt; bool</Method>
+          <Method>stop_container(container_id: str, timeout: int) -&gt; bool</Method>
+          <Method>exec_in_container(container_id: str, command: List[str]) -&gt; ExecResult</Method>
+          <Method>remove_container(container_id: str) -&gt; bool</Method>
+        </Methods>
+        <ResourceConstraints>
+          <CpuQuota>100000（1核）</CpuQuota>
+          <MemoryLimit>512m</MemoryLimit>
+          <NetworkMode>none（禁用网络）</NetworkMode>
+          <ReadonlyRootfs>true</ReadonlyRootfs>
+        </ResourceConstraints>
+      </Component>
+      
+      <Component name="SecurityEnforcer">
+        <Description>安全执行器，实施安全策略</Description>
+        <Policies>
+          <Policy>禁止网络访问（除非明确授权）</Policy>
+          <Policy>禁止访问宿主机文件系统</Policy>
+          <Policy>禁止使用危险系统调用</Policy>
+          <Policy>限制CPU/内存使用</Policy>
+          <Policy>超时强制终止</Policy>
+        </Policies>
+        <ForbiddenModules>
+          <Module>os.system</Module>
+          <Module>subprocess</Module>
+          <Module>__import__</Module>
+          <Module>open（限制模式）</Module>
+        </ForbiddenModules>
+      </Component>
+      
+      <Component name="ExecutionLogger">
+        <Description>执行日志记录器，记录所有执行活动</Description>
+        <LogLevel>INFO</LogLevel>
+        <LogContent>
+          <Field>执行时间</Field>
+          <Field>用户ID</Field>
+          <Field>代码哈希（脱敏）</Field>
+          <Field>资源使用</Field>
+          <Field>执行结果状态</Field>
+        </LogContent>
+      </Component>
+    </Components>
+    
+    <DataFlow>
+      <Step order="1">接收执行请求（language, code, timeout）</Step>
+      <Step order="2">验证语言和代码（基本安全检查）</Step>
+      <Step order="3">SandboxManager创建隔离环境</Step>
+      <Step order="4">ResourceLimiter设置资源限制</Step>
+      <Step order="5">CodeExecutor在沙盒内执行代码</Step>
+      <Step order="6">SecurityEnforcer监控执行过程</Step>
+      <Step order="7">捕获stdout、stderr、exit_code</Step>
+      <Step order="8">SandboxManager销毁环境</Step>
+      <Step order="9">ExecutionLogger记录执行日志</Step>
+      <Step order="10">返回ExecutionResult</Step>
+    </DataFlow>
+  </Structure>
+  
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="run_code">
+      <Signature>
+        <Input>
+          <Parameter name="language" type="str" required="true">
+            <Description>编程语言</Description>
+            <ValidValues>python, javascript, bash</ValidValues>
+          </Parameter>
+          <Parameter name="code" type="str" required="true">
+            <Description>要执行的代码字符串</Description>
+            <Constraints>非空，最大长度100000字符（约100KB）</Constraints>
+            <Example>
+              <![CDATA[
+              def fibonacci(n):
+                  if n <= 1:
+                      return n
+                  return fibonacci(n-1) + fibonacci(n-2)
+              
+              print(f"Fibonacci(10) = {fibonacci(10)}")
+              ]]>
+            </Example>
+          </Parameter>
+          <Parameter name="timeout" type="int" required="false" default="30">
+            <Description>执行超时时间（秒）</Description>
+            <Constraints>1 &lt;= timeout &lt;= 300</Constraints>
+          </Parameter>
+          <Parameter name="environment_config" type="dict" required="false">
+            <Description>环境配置（资源限制、网络权限等）</Description>
+            <Fields>
+              <Field name="memory_limit" type="int">内存限制（MB）</Field>
+              <Field name="cpu_limit" type="float">CPU限制（核数）</Field>
+              <Field name="enable_network" type="bool">是否允许网络</Field>
+              <Field name="allowed_imports" type="list">允许的Python导入</Field>
+            </Fields>
+          </Parameter>
+        </Input>
+        
+        <Output type="ExecutionResult">
+          <Field name="exit_code" type="int" required="true">
+            <Description>进程退出码</Description>
+            <Value>0 = 成功，非0 = 失败/错误</Value>
+          </Field>
+          <Field name="stdout" type="str" required="true">
+            <Description>标准输出内容</Description>
+            <Constraints>最大长度10000字符，超出部分截断</Constraints>
+          </Field>
+          <Field name="stderr" type="str" required="true">
+            <Description>标准错误输出内容</Description>
+            <Constraints>最大长度10000字符，超出部分截断</Constraints>
+          </Field>
+          <Field name="execution_time" type="float" required="true">
+            <Description>实际执行耗时（秒）</Description>
+          </Field>
+          <Field name="resource_usage" type="dict" required="false">
+            <Description>资源使用统计</Description>
+            <Fields>
+              <Field name="memory_peak" type="int">内存峰值（MB）</Field>
+              <Field name="cpu_time" type="float">CPU时间（秒）</Field>
+            </Fields>
+          </Field>
+          <Field name="environment_id" type="str" required="false">
+            <Description>执行环境ID（用于调试）</Description>
+          </Field>
+        </Output>
+        
+        <Exceptions>
+          <Exception name="UnsupportedLanguageError">
+            <Description>不支持的语言</Description>
+            <ErrorCode>400</ErrorCode>
+          </Exception>
+          <Exception name="SecurityViolationError">
+            <Description>代码违反安全策略（如尝试访问禁止的模块）</Description>
+            <ErrorCode>403</ErrorCode>
+          </Exception>
+          <Exception name="ResourceExceededError">
+            <Description>超出资源限制（内存/CPU/时间）</Description>
+            <ErrorCode>413</ErrorCode>
+          </Exception>
+          <Exception name="ExecutionTimeoutError">
+            <Description>执行超时</Description>
+            <ErrorCode>408</ErrorCode>
+          </Exception>
+          <Exception name="SandboxCreationError">
+            <Description>无法创建沙盒环境（如Docker不可用）</Description>
+            <ErrorCode>503</ErrorCode>
+          </Exception>
+        </Exceptions>
+      </Signature>
+    </PrimaryMethod>
+    
+    <SecondaryMethod name="run_command">
+      <Signature>
+        <Input>
+          <Parameter name="command" type="str" required="true">
+            <Description>要执行的shell命令</Description>
+            <Constraints>需要admin权限</Constraints>
+          </Parameter>
+          <Parameter name="timeout" type="int" required="false" default="30">
+            <Description>超时时间</Description>
+          </Parameter>
+        </Input>
+        
+        <Output type="ExecutionResult">
+          <Description>同run_code的输出</Description>
+        </Output>
+      </Signature>
+    </SecondaryMethod>
+  </Interface>
+  
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Layer id="L5">能力抽象层 (Tools &amp; Capabilities)</Layer>
+      <Relation>被调用（接收执行指令）</Relation>
+      <Method>L5.ToolExecutor通过RuntimeInterface调用L6.run_code()或run_command()</Method>
+      <DataFormat>字符串（language, code）</DataFormat>
+      <RuntimeDelegate>
+        <Attribute name="runtime_delegate">L6.SandboxManager</Attribute>
+        <Attribute name="security_delegate">L6.SecurityEnforcer</Attribute>
+        <Attribute name="resource_delegate">L6.ResourceLimiter</Attribute>
+        <MandatoryDelegation>
+          <Rule>所有BashAnalyzer标识为shell/EXEC类型的工具（terminal、python_repl、javascript）必须经由L6.SandboxManager执行，禁止在L5层直接调用宿主机shell</Rule>
+          <Rule>L5.ToolExecutor必须通过RuntimeInterface将代码执行委托至L6，禁止在L5层直接执行用户代码</Rule>
+        </MandatoryDelegation>
+        <Note>L5.ToolExecutor必须通过RuntimeInterface将代码执行委托至L6，禁止在L5层直接执行用户代码</Note>
+      </RuntimeDelegate>
+      <CallChain>
+        <Step>L5.ToolExecutor判断工具类型是否需要沙盒执行（python_repl、terminal、javascript）</Step>
+        <Step>L6.SandboxManager.create(environment_id, config) 创建隔离环境</Step>
+        <Step>L6.SecurityEnforcer.validate(code) 执行前安全检查</Step>
+        <Step>L6.ResourceLimiter.set(cpu, memory, time, disk) 设置资源配额</Step>
+        <Step>L6.CodeExecutor.run() 或 L6.DockerController.exec_in_container() 执行代码</Step>
+        <Step>L6.SandboxManager.destroy(environment_id) 销毁环境</Step>
+        <Step>L6.ExecutionLogger.log() 记录执行日志</Step>
+        <Step>返回ExecutionResult给L5.ToolExecutor</Step>
+      </CallChain>
+    </Upstream>
+    
+    <ExternalDependencies>
+      <Dependency id="Docker">
+        <Service>Docker Engine</Service>
+        <Usage>DockerController创建和管理容器</Usage>
+        <CouplingType>外部服务依赖</CouplingType>
+        <Fallback>ProcessSandbox（Docker不可用时）</Fallback>
+      </Dependency>
+      
+      <Dependency id="OS">
+        <Service>宿主机操作系统（Linux/Windows）</Service>
+        <Usage>资源限制（cgroups）、进程管理、文件系统</Usage>
+        <CouplingType>系统级依赖</CouplingType>
+      </Dependency>
+    </ExternalDependencies>
+    
+    <Dependencies>
+      <Internal>
+        <Dependency>models.ExecutionResult - 输出数据结构</Dependency>
+        <Dependency>interfaces.RuntimeInterface - 接口定义</Dependency>
+      </Internal>
+      <External>
+        <Dependency>docker - Docker Python客户端</Dependency>
+        <Dependency>restrictedpython - 受限Python执行</Dependency>
+        <Dependency>psutil - 进程和资源监控</Dependency>
+      </External>
+    </Dependencies>
+    
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>被动调用（被L5直接调用）</CouplingType>
+    
+    <Note>
+      L6是最底层，只被L5调用，不依赖其他层。它直接操作宿主机资源，因此需要严格的安全控制。
+      L6应该是无状态的，每次执行都是独立的沙盒环境。
+    </Note>
+  </Coupling>
+  
+</Layer>

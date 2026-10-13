@@ -1,0 +1,63 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:24:52.459047",
+  "execution_time": 5.090090990066528,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "7bdea055-7f24-43c4-80fa-c7328dcb2088",
+    "query": "帮我下载一份最新的中国地图全高清版",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "error",
+    "error_code": 400,
+    "error_message": "Invalid operation: retrieve_and_search is not supported by the L4 interface. Supported operations are: search, store, store_conversation, retrieve_history.",
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search",
+      "[2] 校验接口: 发现操作类型不在规范支持范围内",
+      "[3] 中止处理: 未执行检索、存储或历史操作"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "skipped",
+        "reason": "请求操作无效，未进入缓存检查阶段"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "请求操作无效，未执行Embedding生成"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "请求操作无效，未执行文本分块"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "请求操作无效，未执行向量检索或存储"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "请求操作无效，未执行历史存储或检索"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "请求操作无效，未触发索引管理"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search",
+    "[2] 校验接口: 发现操作类型不在规范支持范围内",
+    "[3] 中止处理: 未执行检索、存储或历史操作"
+  ],
+  "error": null
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "rule": "R2",
+    "severity": "low",
+    "layer": "L4",
+    "component": "VectorStore",
+    "message": "Component 'VectorStore' is defined in XML but never touched in tests. It has references, so marked as Underutilized.",
+    "action": "observe",
+    "file": "docs\\03_specs\\L4_MemoryKnowledge.xml"
+  },
+  {
+    "rule": "R2",
+    "severity": "low",
+    "layer": "L4",
+    "component": "EmbeddingService",
+    "message": "Component 'EmbeddingService' is defined in XML but never touched in tests. It has references, so marked as Underutilized.",
+    "action": "observe",
+    "file": "docs\\03_specs\\L4_MemoryKnowledge.xml"
+  },
+  {
+    "rule": "R2",
+    "severity": "low",
+    "layer": "L4",
+    "component": "TextChunker",
+    "message": "Component 'TextChunker' is defined in XML but never touched in tests. It has references, so marked as Underutilized.",
+    "action": "observe",
+    "file": "docs\\03_specs\\L4_MemoryKnowledge.xml"
+  },
+  {
+    "rule": "R2",
+    "severity": "low",
+    "layer": "L4",
+    "component": "MemoryStore",
+    "message": "Component 'MemoryStore' is defined in XML but never touched in tests. It has references, so marked as Underutilized.",
+    "action": "observe",
+    "file": "docs\\03_specs\\L4_MemoryKnowledge.xml"
+  },
+  {
+    "rule": "R2",
+    "severity": "low",
+    "layer": "L4",
+    "component": "IndexManager",
+    "message": "Component 'IndexManager' is defined in XML but never touched in tests. It has references, so marked as Underutilized.",
+    "action": "observe",
+    "file": "docs\\03_specs\\L4_MemoryKnowledge.xml"
+  },
+  {
+    "rule": "R2",
+    "severity": "low",
+    "layer": "L4",
+    "component": "CacheManager",
+    "message": "Component 'CacheManager' is defined in XML but never touched in tests. It has references, so marked as Underutilized.",
+    "action": "observe",
+    "file": "docs\\03_specs\\L4_MemoryKnowledge.xml"
+  },
+  {
+    "rule": "R7",
+    "severity": "medium",
+    "layer": "L6",
+    "component": "SandboxManager",
+    "message": "Critical component 'SandboxManager' appears in traces but never as 'active'. Consider adding test coverage.",
+    "action": "add_tests",
+    "file": "docs\\03_specs\\L6_RuntimeEnvironment.xml"
+  },
+  {
+    "rule": "R7",
+    "severity": "medium",
+    "layer": "L6",
+    "component": "SecurityEnforcer",
+    "message": "Critical component 'SecurityEnforcer' appears in traces but never as 'active'. Consider adding test coverage.",
+    "action": "add_tests",
+    "file": "docs\\03_specs\\L6_RuntimeEnvironment.xml"
+  }
+]

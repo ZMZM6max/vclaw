@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Component: LLMManager
+  Layer: L3 (Orchestration)
+  创建时间: 2026-04-27
+  用途: 定义L3 LLM调用管理器的详细规范
+  状态: 现有代码较完整
+-->
+<Component name="LLMManager" layer="L3" version="1.0">
+
+  <Description>
+    LLM调用管理器，封装大模型交互细节。支持多Provider切换、自动重试、流式输出。
+    为ReActEngine、TaskPlanner、SecurityGuard、ErrorTranslator提供统一的LLM调用接口。
+  </Description>
+
+  <Responsibilities>
+    <Item priority="critical">封装多Provider LLM API调用（OpenAI、Anthropic、Kimi）</Item>
+    <Item priority="critical">实现自动重试机制（指数退避+抖动）</Item>
+    <Item priority="high">支持函数调用/工具调用（AgentAction生成）</Item>
+    <Item priority="high">支持流式输出（stream）</Item>
+    <Item priority="medium">Provider动态切换</Item>
+    <Item priority="medium">异常封装（统一抛出LLMError）</Item>
+  </Responsibilities>
+
+  <Providers>
+    <Provider name="OpenAI">
+      <Models>gpt-4o, gpt-4, gpt-3.5-turbo</Models>
+      <BaseURL>从环境变量 OPENAI_BASE_URL 或 API_BASE_URL 读取，默认 https://api.openai.com/v1</BaseURL>
+      <APIKey>从环境变量 OPENAI_API_KEY 读取</APIKey>
+      <Features>函数调用、流式、JSON模式</Features>
+    </Provider>
+    <Provider name="Anthropic">
+      <Models>claude-3-sonnet, claude-3-opus</Models>
+      <BaseURL>https://api.anthropic.com</BaseURL>
+      <APIKey>从环境变量 ANTHROPIC_API_KEY 读取</APIKey>
+      <Features>工具使用、流式</Features>
+      <Note>内部自动将OpenAI格式消息转换为Anthropic格式</Note>
+    </Provider>
+    <Provider name="Kimi">
+      <Models>moonshot-v1-128k</Models>
+      <BaseURL>https://api.moonshot.cn/v1</BaseURL>
+      <APIKey>从环境变量 KIMI_API_KEY 读取</APIKey>
+      <Features>兼容OpenAI API格式</Features>
+    </Provider>
+  </Providers>
+
+  <Configuration>
+    <DefaultProvider>OPENAI</DefaultProvider>
+    <DefaultModel>gpt-4o</DefaultModel>
+    <MaxTokens>4096</MaxTokens>
+    <Temperature>0.7</Temperature>
+    <Timeout>30秒</Timeout>
+    <MaxRetries>3</MaxRetries>
+    <RetryDelay>1.0秒</RetryDelay>
+    <MaxDelay>60秒</MaxDelay>
+    <BackoffStrategy>exponential with jitter (±25%)</BackoffStrategy>
+  </Configuration>
+
+  <RetryPolicy>
+    <Condition>LLMError（API调用失败、网络错误、超时）</Condition>
+    <Behavior>
+      <Attempt>第1次：立即调用</Attempt>
+      <Attempt>第2次：delay * (0.75 + random * 0.5) 后重试，delay *= 2</Attempt>
+      <Attempt>第3次：同上</Attempt>
+      <Failure>抛出LLMError，包含失败详情</Failure>
+    </Behavior>
+    <Note>仅对LLMError重试，不处理其他异常类型</Note>
+  </RetryPolicy>
+
+  <Methods>
+    <Method name="complete">
+      <Signature>
+        <Input>
+          <Parameter name="messages" type="List[Dict]" required="true">对话消息列表（OpenAI格式）</Parameter>
+          <Parameter name="tools" type="List[Dict]" required="false">可用工具定义（OpenAI函数格式）</Parameter>
+          <Parameter name="temperature" type="float" required="false">温度参数</Parameter>
+          <Parameter name="max_tokens" type="int" required="false">最大Token数</Parameter>
+        </Input>
+        <Output type="Union[str, AgentAction]">
+          <Variant type="str">LLM生成的文本回复</Variant>
+          <Variant type="AgentAction">LLM选择的工具调用（当message.tool_calls存在时）</Variant>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 调用底层Provider的complete方法</Step>
+        <Step>2. 检查response.choices[0].message.tool_calls</Step>
+        <Step>3. 若存在tool_calls，解析为AgentAction返回</Step>
+        <Step>4. 否则返回message.content</Step>
+        <ErrorHandling>任何异常封装为LLMError抛出</ErrorHandling>
+      </Implementation>
+    </Method>
+
+    <Method name="stream">
+      <Signature>
+        <Input>
+          <Parameter name="messages" type="List[Dict]" required="true">对话消息列表</Parameter>
+          <Parameter name="temperature" type="float" required="false">温度参数</Parameter>
+        </Input>
+        <Output type="Iterator[str]">
+          <Description>逐字生成的文本片段</Description>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 调用底层Provider的stream方法</Step>
+        <Step>2. 逐chunk yield delta.content</Step>
+        <ErrorHandling>异常封装为LLMError</ErrorHandling>
+      </Implementation>
+    </Method>
+
+    <Method name="switch_provider">
+      <Signature>
+        <Input>
+          <Parameter name="provider" type="Union[str, ProviderType]" required="true">目标Provider名称</Parameter>
+          <Parameter name="model" type="str" required="false">模型名称</Parameter>
+          <Parameter name="api_key" type="str" required="false">API Key</Parameter>
+        </Input>
+      </Signature>
+      <Description>动态切换LLM Provider</Description>
+    </Method>
+  </Methods>
+
+  <ErrorHandling>
+    <Exception name="LLMError">
+      <Description>所有LLM调用错误的统一封装</Description>
+      <Causes>API密钥无效、网络超时、模型不存在、Rate Limit</Causes>
+      <Propagation>向上抛出，由调用方处理</Propagation>
+    </Exception>
+  </ErrorHandling>
+
+  <Integration>
+    <Upstream>
+      <From>L3.ReActEngine, L3.TaskPlanner, L3.SecurityGuard, L3.ErrorTranslator</From>
+      <Data>messages、tools、temperature等</Data>
+    </Upstream>
+    <Downstream>
+      <To>外部LLM服务（OpenAI API、Anthropic API、Kimi API）</To>
+    </Downstream>
+  </Integration>
+
+  <Testing>
+    <TestCases>
+      <Case id="TC-LLM-001">complete() 返回文本回复</Case>
+      <Case id="TC-LLM-002">complete() 传入tools时返回AgentAction</Case>
+      <Case id="TC-LLM-003">stream() 逐字输出</Case>
+      <Case id="TC-LLM-004">重试机制在失败后触发</Case>
+      <Case id="TC-LLM-005">switch_provider() 正确切换</Case>
+    </TestCases>
+  </Testing>
+
+  <ImplementationNotes>
+    <Note>现有代码位于 src/l3/l3_orchestration.py LLMManager 类及相关Provider类</Note>
+    <Note>当前状态：OpenAIProvider、AnthropicProvider、KimiProvider、LLMManager均已实现</Note>
+    <Note>当前状态：complete()、stream()、switch_provider()、重试逻辑均已实现</Note>
+    <Note>当前状态：AnthropicProvider内部自动转换OpenAI格式为Anthropic格式</Note>
+  </ImplementationNotes>
+
+</Component>

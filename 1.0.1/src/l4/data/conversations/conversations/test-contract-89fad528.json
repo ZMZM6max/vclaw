@@ -1,0 +1,15 @@
+{
+  "session_id": "test-contract-89fad528",
+  "messages": [
+    {
+      "role": "user",
+      "content": "你好，我叫张三。"
+    },
+    {
+      "role": "assistant",
+      "content": "你好张三！很高兴认识你。有什么我可以帮你的吗？"
+    }
+  ],
+  "updated_at": 1777363500.467783,
+  "message_count": 2
+}

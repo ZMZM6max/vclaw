@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-03",
+  "test_name": "复杂条件的文件检索",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是已找到匹配文件并主动询问是否打开，而实际回复表示未找到文件并继续索取更多信息，核心语义不一致。",
+  "final_response": "我查看了默认文档目录，但当前没有找到可用的文件线索。你可以告诉我更具体的文件名、发送时间，或者让我继续在其他文件夹里帮你找。",
+  "execution_time": 35.54376530647278,
+  "layer_count": 6,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-03",
+  "timestamp": "2026-04-21T18:15:59.253738"
+}

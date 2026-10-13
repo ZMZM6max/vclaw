@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-27",
+  "test_name": "任务随时取消机制",
+  "category": "UX体验",
+  "priority": "P1",
+  "user_input": "停下来，不弄了",
+  "precondition": "Agent正在后台处理大文件合并",
+  "react_flow": "Thought: 识别到中断指令 -> Action: 调用中断工具结束进程，清理缓存",
+  "expected_result": "系统: 立即终止后台进程，释放CPU和内存。结果: 回复'好的，已经马上停下来了，文件没动。'",
+  "risk_level": "中 - 无法中断导致资源长期被占，影响系统流畅度",
+  "test_type": "UX",
+  "tags": [
+    "手工"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "停下来，不弄了"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:26:27.067722"
+}

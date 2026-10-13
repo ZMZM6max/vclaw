@@ -1,0 +1,14 @@
+{
+  "l2_session_metadata": {
+    "value": {
+      "session_id": "f2d6b4a2-498f-496f-aba5-2cdb8bc2fa31",
+      "user_id": "web-console-user",
+      "created_at": 1777371348.8412805
+    },
+    "updated_at": 1777371348.841581
+  },
+  "active_session_id": {
+    "value": "f2d6b4a2-498f-496f-aba5-2cdb8bc2fa31",
+    "updated_at": 1777371408.794372
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "semantic_findings": [
+    {
+      "id": "LLM-01",
+      "layer": "L4",
+      "component": "MemoryStore",
+      "issue_type": "missing_rules",
+      "description": "L4 记忆/知识层的所有组件（VectorStore, EmbeddingService, TextChunker, MemoryStore, IndexManager, CacheManager）在 XML 中定义但从未在任何 trace 中被调用。TC-03、TC-07 期望系统能基于历史交互（已找到的文件、下载夹的文件列表）主动给出上下文相关回复，但实际未检索历史，说明 L4 层未被实际接入数据流。",
+      "recommendation": "在 XML 中显式定义 L2.HistoryRetriever -> L4.MemoryStore/VectorStore 的调用链路，或将 L4 整体标记为废弃；同时在 Prompt 中加入'优先检索 memory 中的最近文件操作上下文'指令",
+      "affected_test_cases": [
+        "TC-03",
+        "TC-07"
+      ],
+      "patch_target": "xml",
+      "tags": [
+        "dead_component",
+        "memory_missing"
+      ]
+    },
+    {
+      "id": "LLM-02",
+      "layer": "L3",
+      "component": "SecurityGuard",
+      "issue_type": "prompt_semantic_gap",
+      "description": "TC-05 中整理建议这一低风险操作被误判为高危并强制二次确认，TC-08 中文件冲突未被捕获却返回成功。说明 SecurityGuard 的风险等级阈值过于激进，与 XML 中描述的'按操作影响面分级确认'语义不符；ConfirmationManager 也未与 ToolExecutor 的实际执行结果联动。",
+      "recommendation": "在 XML 中明确 SecurityGuard 的风险分级矩阵（read-only/organize=low, delete/overwrite=high），并在 Prompt 中删除'对所有文件操作均要求确认'的兜底语句",
+      "affected_test_cases": [
+        "TC-05",
+        "TC-08"
+      ],
+      "patch_target": "prompt",
+      "tags": [
+        "over_confirmation",
+        "risk_grading"
+      ]
+    },
+    {
+      "id": "LLM-03",
+      "layer": "L5",
+      "component": "ResultFormatter",
+      "issue_type": "dataflow_mismatch",
+      "description": "TC-07 期望列出下载夹35个文件后询问是否清空，TC-03 期望返回匹配文件名后询问是否打开，但实际回复均为通用提示，丢失了 ToolExecutor 返回的结构化结果。表明 L5.ToolExecutor -> L5.ResultFormatter -> L1 输出的数据流断裂，结构化结果被 LLM 总结时丢弃。",
+      "recommendation": "在 XML 中规定 ResultFormatter 必须保留 file_list 等枚举型字段透传到 L1；在 Prompt 中加入'当工具返回 list 类型结果时，必须原样列出条目再追加询问'",
+      "affected_test_cases": [
+        "TC-03",
+        "TC-07"
+      ],
+      "patch_target": "prompt",
+      "tags": [
+        "result_loss",
+        "dataflow"
+      ]
+    },
+    {
+      "id": "LLM-04",
+      "layer": "L5",
+      "component": "BashAnalyzer",
+      "issue_type": "missing_rules",
+      "description": "TC-08 文件已存在冲突未被识别，说明工具执行前缺少前置状态检查（exists check）。XML 中 BashAnalyzer 与 ParameterValidator 未定义对写操作的预检规则。",
+      "recommendation": "在 XML 的 ParameterValidator 中增加 'pre_execution_state_check' 规则，对 write/create 类操作先调用 stat 判断冲突并将冲突上抛 ErrorTranslator",
+      "affected_test_cases": [
+        "TC-08"
+      ],
+      "patch_target": "xml",
+      "tags": [
+        "precheck_missing"
+      ]
+    },
+    {
+      "id": "LLM-05",
+      "layer": "L3",
+      "component": "ErrorTranslator",
+      "issue_type": "trace_anomaly",
+      "description": "TC-10 期望对空文档给出口语化直接回复'这个文档里面什么都没有写哦，是空的。'，实际回复机械化（'内容为空，因此没有可供总…'）。Trace 中 ErrorTranslator 被触发但未做语气适配，存在 prompt 风格指引缺失。",
+      "recommendation": "在 Prompt 中加入语气模板：当工具返回 empty_content 时，使用拟人化简短回复而非格式化报告",
+      "affected_test_cases": [
+        "TC-10"
+      ],
+      "patch_target": "prompt",
+      "tags": [
+        "tone",
+        "empty_result"
+      ]
+    },
+    {
+      "id": "LLM-06",
+      "layer": "L6",
+      "component": "SandboxManager",
+      "issue_type": "trace_anomaly",
+      "description": "RuleEngine R7 提示 SandboxManager 与 SecurityEnforcer 这两个关键组件出现在 trace 中但未在 XML 显式声明其在 L5 调用链上的位置，存在隐式调用，影响可审计性。",
+      "recommendation": "在 XML 中显式定义 L5.ToolExecutor -> L6.SandboxManager -> L6.CodeExecutor 的调用关系，并补充 SecurityEnforcer 的拦截点",
+      "affected_test_cases": [],
+      "patch_target": "xml",
+      "tags": [
+        "implicit_call",
+        "auditability"
+      ]
+    }
+  ]
+}

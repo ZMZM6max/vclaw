@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L2 Component: HistoryRetriever
+  拆分自: L2_ControlGateway.xml
+  用途: 历史记录检索器，从 L4 获取用户历史对话用于上下文组装
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L2_ControlGateway.xml
+  src/l2/docs/L2_ControlGateway.xml
+-->
+<Component id="L2.HistoryRetriever" name="HistoryRetriever" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>历史记录检索器，从 L4 获取用户历史对话，按 OpenAI 消息格式返回，供上下文组装使用</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">调用 L4 接口检索指定会话的历史对话</Item>
+      <Item priority="high">透传 L4 返回的 OpenAI 格式历史消息列表</Item>
+      <Item priority="high">L4 不可用时降级返回空列表，避免阻塞用户请求</Item>
+      <Item priority="medium">控制返回条数（默认 10 条，由调用方指定）</Item>
+    </Responsibilities>
+
+    <SlidingWindow>
+      <MaxMessages>10</MaxMessages>
+      <Format>OpenAI 消息格式 [{"role": "user"/"assistant", "content": "..."}, ...]</Format>
+      <Note>是否包含 system 消息由 L4 内部决定，HistoryRetriever 仅透传</Note>
+    </SlidingWindow>
+
+    <DataFlow>
+      <Step order="1">ContextAssembler 调用 retrieve(session_id, limit)</Step>
+      <Step order="2">调用 memory.retrieve_history(session_id, limit=limit)</Step>
+      <Step order="3" condition="L4 正常">返回历史消息列表</Step>
+      <Step order="4" condition="L4 异常">捕获异常，返回空列表 []</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="retrieve">
+      <Signature>retrieve(session_id: str, limit: int = 10) -&gt; List[Dict]</Signature>
+      <Description>检索会话历史记录。L4 不可用时降级返回空列表</Description>
+      <Input>
+        <Parameter name="session_id" type="str" required="true">
+          <Description>会话唯一标识</Description>
+        </Parameter>
+        <Parameter name="limit" type="int" required="false">
+          <Description>最大返回条数</Description>
+          <Default>10</Default>
+        </Parameter>
+      </Input>
+      <Output type="List[Dict]">
+        <Description>OpenAI 格式的消息列表。每个元素为 {"role": str, "content": str}</Description>
+        <Example>
+          <![CDATA[
+          [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"}
+          ]
+          ]]}
+        </Example>
+      </Output>
+    </PrimaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L2.ContextAssembler">上下文组装器</Component>
+      <Relation>被调用方（assemble 中调用 retrieve）</Relation>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="L4">记忆与知识层</Layer>
+      <Relation>调用 L4.retrieve_history() 获取历史记录</Relation>
+      <DataFormat>OpenAI 消息格式列表</DataFormat>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>core.interfaces.MemoryInterface - L4 接口抽象</Dependency>
+      </Internal>
+    </Dependencies>
+
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>数据耦合（通过 MemoryInterface 调用，失败时降级为空列表）</CouplingType>
+
+    <Note>
+      HistoryRetriever 通过 MemoryInterface 与 L4 解耦，便于测试时注入 Mock。
+      异常降级策略确保 L4 故障不影响整体请求处理。
+    </Note>
+  </Coupling>
+
+</Component>

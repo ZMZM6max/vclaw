@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-32",
+  "test_name": "无意义的打断",
+  "category": "UX体验",
+  "priority": "P2",
+  "user_input": "等一下 或 啊对了 (不含具体指令)",
+  "precondition": "Agent处于空闲状态",
+  "react_flow": "Thought: 无实质性任务指令，仅为语气词 -> Action: 进行拟人化安抚回复",
+  "expected_result": "系统: 不调用任何工具。结果: 回复'我在呢，您想到了什么随时告诉我～'",
+  "risk_level": "低 - 大模型强行揣测意图乱执行操作",
+  "test_type": "UX",
+  "tags": [
+    "可自动化"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "等一下 或 啊对了 (不含具体指令)"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:28:28.352463"
+}

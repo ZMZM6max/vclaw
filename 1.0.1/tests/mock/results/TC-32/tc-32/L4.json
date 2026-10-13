@@ -1,0 +1,96 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:28:33.879707",
+  "execution_time": 5.534686088562012,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "ba85a8e1-7d74-43d2-9737-b64cdb48be45",
+    "query": "等一下 或 啊对了 (不含具体指令)",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "error",
+    "error_code": 400,
+    "error_type": "InvalidOperationError",
+    "message": "Unsupported operation: retrieve_and_search. Supported operations are search, store, store_conversation, retrieve_history.",
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search",
+      "[2] 校验操作类型: 未通过",
+      "[3] 终止处理: 操作类型不在规范范围内"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "skipped",
+        "reason": "操作类型无效，未进入缓存检查步骤"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "操作类型无效，未触发Embedding生成"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "操作类型无效，未触发文本分块"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "操作类型无效，未触发向量检索或存储"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "操作类型无效，未触发记忆存取"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "操作类型无效，未触发索引管理"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search",
+    "[2] 校验操作类型: 未通过",
+    "[3] 终止处理: 操作类型不在规范范围内"
+  ],
+  "component_trace": [
+    {
+      "component": "CacheManager",
+      "status": "skipped",
+      "reason": "操作类型无效，未进入缓存检查步骤"
+    },
+    {
+      "component": "EmbeddingService",
+      "status": "skipped",
+      "reason": "操作类型无效，未触发Embedding生成"
+    },
+    {
+      "component": "TextChunker",
+      "status": "skipped",
+      "reason": "操作类型无效，未触发文本分块"
+    },
+    {
+      "component": "VectorStore",
+      "status": "skipped",
+      "reason": "操作类型无效，未触发向量检索或存储"
+    },
+    {
+      "component": "MemoryStore",
+      "status": "skipped",
+      "reason": "操作类型无效，未触发记忆存取"
+    },
+    {
+      "component": "IndexManager",
+      "status": "skipped",
+      "reason": "操作类型无效，未触发索引管理"
+    }
+  ],
+  "error": null
+}

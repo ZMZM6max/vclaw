@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L1: 用户接入层 (User Interaction)
+  创建时间: 2024
+  用途: 详细定义第一层的架构、接口、耦合和测试规范
+-->
+<Layer id="L1" name="UserInteraction" version="1.0">
+  
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>系统的门面，负责所有形式的输入与输出处理</Purpose>
+    
+    <Responsibilities>
+      <Item priority="critical">接收并解析异构外部协议（WebSocket, Telegram API, HTTP Webhook）</Item>
+      <Item priority="critical">剥离渠道特征，将原始数据标准化为统一事件格式</Item>
+      <Item priority="high">数据验证和清洗（JSON Schema校验、注入防护）</Item>
+      <Item priority="high">错误处理和重试机制（连接失败时的指数退避）</Item>
+      <Item priority="medium">日志记录和监控埋点</Item>
+    </Responsibilities>
+    
+    <Components>
+      <Component name="ProtocolAdapter">
+        <Description>协议适配器基类，定义统一适配接口</Description>
+        <Implementations>
+          <Impl>WebSocketAdapter - 处理WebSocket连接</Impl>
+          <Impl>TelegramAdapter - 处理Telegram Bot API</Impl>
+          <Impl>HttpWebhookAdapter - 处理HTTP Webhook回调</Impl>
+        </Implementations>
+      </Component>
+      
+      <Component name="DataValidator">
+        <Description>数据验证器，确保输入数据符合预期格式</Description>
+        <Rules>
+          <Rule>channel必须是预定义的有效值</Rule>
+          <Rule>user_id不能为空且长度限制在256字符内</Rule>
+          <Rule>content不能为空</Rule>
+          <Rule>timestamp必须是有效的Unix时间戳</Rule>
+        </Rules>
+      </Component>
+      
+      <Component name="EventNormalizer">
+        <Description>事件标准化器，将各种格式的原始数据转为StandardEvent</Description>
+      </Component>
+      
+      <Component name="ErrorHandler">
+        <Description>错误处理器，管理 L1 层传输/协议级异常和重试逻辑，同时接收L3.ErrorTranslator经L2回流的业务错误进行规范化输出</Description>
+        <Scope>
+          <Item>仅处理 L1 层内部错误：连接失败、协议解析错误、数据格式异常</Item>
+          <Item>禁止介入业务语义错误的转译——此类错误由 L3.ErrorTranslator 处理</Item>
+          <Item>负责接收L3.ErrorTranslator经L2回流的业务错误，进行协议级格式化（HTTP状态码、Telegram消息结构等）</Item>
+        </Scope>
+        <ErrorReturnPath>
+          <Step>L3.ErrorTranslator 将业务错误转译为中文友好提示</Step>
+          <Step>L2 将转译后的错误文本作为响应体回传</Step>
+          <Step>L1.ErrorHandler 根据渠道类型（Telegram/HTTP/WebSocket）格式化最终输出结构</Step>
+          <Note>分工：ErrorTranslator = 语义转译（中文），ErrorHandler = 协议格式化（状态码+消息结构）</Note>
+        </ErrorReturnPath>
+        <RetryPolicy>
+          <MaxRetries>3</MaxRetries>
+          <BackoffStrategy>exponential</BackoffStrategy>
+          <InitialDelay>1000ms</InitialDelay>
+        </RetryPolicy>
+      </Component>
+
+      <Component name="SessionManager">
+        <Description>用户会话标识管理器（L1层），仅维护 user_id 到 session_id 的映射关系。会话生命周期管理由L2.SessionManager负责</Description>
+        <Responsibilities>
+          <Item>维护 user_id -> session_id 的单映射关系（内存中的轻量级映射表）</Item>
+          <Item>识别新建会话命令（/new, /reset, /start, 新会话）</Item>
+          <Item>在 StandardEvent.metadata 中注入 session_id</Item>
+          <Item>禁止处理会话TTL、历史记录、状态存储——此类职责属于L2.SessionManager</Item>
+        </Responsibilities>
+        <Boundary>
+          <L1Scope>user_id → session_id 映射注入与透传</L1Scope>
+          <L2Scope>session_id → SessionContext 生命周期管理（创建、获取、更新、过期）</L2Scope>
+          <Note>L1.SessionManager 与 L2.SessionManager 是不同组件：L1管"谁是谁"，L2管"会话里有什么"</Note>
+        </Boundary>
+        <DataStructure>
+          <Field name="_user_session_map" type="Dict[str, str]">
+            <Description>内存中的用户会话映射</Description>
+            <Example>{"user_123": "session-abc-456"}</Example>
+          </Field>
+        </DataStructure>
+        <NewSessionCommands>
+          <Command>/new</Command>
+          <Command>/reset</Command>
+          <Command>/start</Command>
+          <Command>新会话</Command>
+        </NewSessionCommands>
+        <Behavior>
+          <Case name="first_request">
+            <Condition>用户首次请求（无映射）</Condition>
+            <Action>session_id = None，让 L2 创建新会话</Action>
+          </Case>
+          <Case name="subsequent_request">
+            <Condition>用户后续请求（有映射）</Condition>
+            <Action>返回已有的 session_id</Action>
+          </Case>
+          <Case name="new_session_command">
+            <Condition>用户发送 /new 等命令</Condition>
+            <Action>清除旧映射，session_id = None</Action>
+            <Note>旧会话丢失（Phase 1 设计，后续支持恢复）</Note>
+          </Case>
+        </Behavior>
+        <IntegrationWithL2>
+          <Step>1. L1 在 StandardEvent.metadata 中放入 session_id</Step>
+          <Step>2. L2 从 metadata 读取 session_id</Step>
+          <Step>3. L2 返回 SessionContext（包含 session_id）</Step>
+          <Step>4. L1 调用 update_session_mapping() 保存映射</Step>
+        </IntegrationWithL2>
+      </Component>
+    </Components>
+    
+    <DataFlow>
+      <Step order="1">接收原始数据（raw_data: dict）</Step>
+      <Step order="2">根据channel类型选择对应的ProtocolAdapter</Step>
+      <Step order="3">使用DataValidator验证数据完整性</Step>
+      <Step order="4">EventNormalizer将数据转换为StandardEvent</Step>
+      <Step order="5">L1.SessionManager检查并注入session_id到metadata（仅做映射，不管理生命周期）</Step>
+      <Step order="6">返回StandardEvent给上层（L2）</Step>
+      <Step order="7">接收L2返回的SessionContext，L1.SessionManager更新session映射</Step>
+      <Step order="8" condition="L1内部协议错误">L1.ErrorHandler记录并重试（连接失败、解析错误等）</Step>
+      <Step order="9" condition="L3业务错误回流">L3.ErrorTranslator → L2 → L1.ErrorHandler 格式化输出业务错误给用户</Step>
+    </DataFlow>
+  </Structure>
+  
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="receive_payload">
+      <Signature>
+        <Input>
+          <Parameter name="raw_data" type="dict" required="true">
+            <Description>原始输入数据，格式取决于渠道类型</Description>
+            <Example>
+              <![CDATA[
+              {
+                "update_id": 123456789,
+                "message": {
+                  "message_id": 1,
+                  "from": {"id": 12345, "first_name": "User"},
+                  "chat": {"id": 12345, "type": "private"},
+                  "date": 1234567890,
+                  "text": "Hello bot"
+                }
+              }
+              ]]>
+            </Example>
+          </Parameter>
+        </Input>
+        
+        <Output type="StandardEvent">
+          <Field name="channel" type="str" required="true">
+            <Description>渠道来源标识</Description>
+            <ValidValues>telegram, websocket, webhook</ValidValues>
+          </Field>
+          <Field name="user_id" type="str" required="true">
+            <Description>用户唯一标识符</Description>
+            <Constraints>非空，最大长度256字符</Constraints>
+          </Field>
+          <Field name="content" type="str" required="true">
+            <Description>用户输入的文本内容</Description>
+            <Constraints>非空</Constraints>
+          </Field>
+          <Field name="timestamp" type="float" required="true">
+            <Description>消息时间戳（Unix时间戳，秒级精度）</Description>
+          </Field>
+          <Field name="metadata" type="dict" required="false">
+            <Description>渠道特定的附加元数据</Description>
+          </Field>
+        </Output>
+        
+        <Exceptions>
+          <Exception name="ValidationError">
+            <Description>输入数据验证失败</Description>
+            <ErrorCode>400</ErrorCode>
+          </Exception>
+          <Exception name="UnsupportedChannelError">
+            <Description>不支持的渠道类型</Description>
+            <ErrorCode>400</ErrorCode>
+          </Exception>
+          <Exception name="ParseError">
+            <Description>数据解析失败</Description>
+            <ErrorCode>500</ErrorCode>
+          </Exception>
+        </Exceptions>
+      </Signature>
+    </PrimaryMethod>
+  </Interface>
+  
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Layer id="External">外部系统（Telegram API, WebSocket客户端, HTTP请求）</Layer>
+      <Relation>接收输入</Relation>
+      <Protocol>HTTPS / WebSocket / HTTP</Protocol>
+    </Upstream>
+    
+    <Downstream>
+      <Layer id="L2">控制网关层 (Control Gateway)</Layer>
+      <Relation>调用</Relation>
+      <Method>直接方法调用: L2.process_event(event: StandardEvent)</Method>
+      <DataFormat>StandardEvent对象</DataFormat>
+    </Downstream>
+    
+    <Dependencies>
+      <Internal>
+        <Dependency>models.StandardEvent - 标准化事件数据结构</Dependency>
+        <Dependency>ProtocolAdapter抽象基类</Dependency>
+      </Internal>
+      <External>
+        <Dependency>websockets - WebSocket客户端库</Dependency>
+        <Dependency>python-telegram-bot - Telegram Bot API客户端</Dependency>
+        <Dependency>fastapi - HTTP Webhook服务器</Dependency>
+      </External>
+    </Dependencies>
+    
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>数据耦合（仅通过StandardEvent数据结构通信）</CouplingType>
+  </Coupling>
+
+</Layer>

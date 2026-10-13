@@ -1,0 +1,342 @@
+{
+  "request_id": "tc-01",
+  "start_time": "2026-04-21T18:14:16.244652",
+  "end_time": "2026-04-21T18:14:48.583152",
+  "status": "failed",
+  "error_message": "L5错误: 参数与用户原始输入不一致，请确认",
+  "final_response": null,
+  "layer_results": [
+    {
+      "layer_name": "L1",
+      "timestamp": "2026-04-21T18:14:16.244820",
+      "execution_time": 8.590669870376587,
+      "processing_log": [
+        "[1] 接收原始数据 - 渠道: telegram",
+        "[2] ProtocolAdapter解析数据",
+        "[3] DataValidator验证字段完整性",
+        "[4] EventNormalizer转换为StandardEvent",
+        "[5] 验证通过，返回结果"
+      ],
+      "component_trace": [
+        {
+          "component": "ProtocolAdapter",
+          "status": "success",
+          "reason": "已根据telegram渠道完成协议适配与字段抽取。",
+          "output_summary": {
+            "channel": "telegram",
+            "user_id": "test_user_001",
+            "content": "帮我在桌面上建个文档，写上今天下午3点开周会",
+            "timestamp": 1704067200
+          }
+        },
+        {
+          "component": "DataValidator",
+          "status": "success",
+          "reason": "字段完整性与基础规则校验通过，未发现非法渠道或空字段。",
+          "output_summary": {
+            "validation": "passed"
+          }
+        },
+        {
+          "component": "EventNormalizer",
+          "status": "success",
+          "reason": "已转换为StandardEvent结构并保留渠道元数据。",
+          "output_summary": {
+            "standard_event": {
+              "channel": "telegram",
+              "user_id": "test_user_001",
+              "timestamp": 1704067200.0
+            }
+          }
+        },
+        {
+          "component": "ErrorHandler",
+          "status": "skipped",
+          "reason": "本次处理未发生错误，因此未触发重试或异常处理。",
+          "output_summary": {
+            "retry_count": 0
+          }
+        },
+        {
+          "component": "SessionManager",
+          "status": "skipped",
+          "reason": "当前输入未要求创建或复用会话映射，故未触发会话管理。",
+          "output_summary": {
+            "session_action": "not_triggered"
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L2",
+      "timestamp": "2026-04-21T18:14:29.150768",
+      "execution_time": 5.299535036087036,
+      "processing_log": [
+        "[1] 限流检查: 用户test_user_001剩余59次请求",
+        "[2] 会话管理: 创建新会话 c2a3d5b1-8b4a-4a2d-9a5d-3f7f1f2e9c11",
+        "[3] 历史检索: 从 L4 获取0条历史记录",
+        "[4] 记忆检索: 从 L4 获取0条相关记忆",
+        "[5] 工具准备: 根据权限筛选出4个可用工具",
+        "[6] 上下文组装: 生成完整的L3输入"
+      ],
+      "component_trace": [
+        {
+          "component": "RateLimiter",
+          "status": "success",
+          "reason": "请求未超过用户/IP/全局限流阈值",
+          "output_summary": "user_remaining=59, ip_remaining=99, global_ok=true"
+        },
+        {
+          "component": "SessionManager",
+          "status": "success",
+          "reason": "成功创建或获取会话上下文",
+          "output_summary": "session_id=c2a3d5b1-8b4a-4a2d-9a5d-3f7f1f2e9c11, ttl=3600s"
+        },
+        {
+          "component": "HistoryRetriever",
+          "status": "success",
+          "reason": "已从L4检索历史记录，返回空列表",
+          "output_summary": "history_count=0"
+        },
+        {
+          "component": "ToolPreparer",
+          "status": "success",
+          "reason": "根据用户权限筛选可用工具完成",
+          "output_summary": "available_tools=4"
+        },
+        {
+          "component": "ContextAssembler",
+          "status": "success",
+          "reason": "已组装完整L3输入",
+          "output_summary": "session_context, available_tools, relevant_memories assembled"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L3",
+      "timestamp": "2026-04-21T18:14:34.467615",
+      "execution_time": 5.524908542633057,
+      "processing_log": [
+        "[1] 接收SessionContext",
+        "[2] SecurityGuard 安全判断: 正常请求",
+        "[3] MemoryAccessor 检索记忆: 无相关记忆",
+        "[4] TaskPlanner 识别为原子文件写入任务",
+        "[5] LLMManager 生成工具调用决策",
+        "[6] ReActEngine 进入第1轮并决定调用工具",
+        "[7] ToolCaller 选择 file_write 执行写入"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityGuard",
+          "status": "active",
+          "reason": "对当前请求完成安全分类，判定为正常文件操作",
+          "output_summary": "normal"
+        },
+        {
+          "component": "MemoryAccessor",
+          "status": "success",
+          "reason": "检索相关记忆以增强上下文",
+          "output_summary": "未检索到可用相关记忆"
+        },
+        {
+          "component": "TaskPlanner",
+          "status": "success",
+          "reason": "将请求规划为单步文件创建与写入",
+          "output_summary": "atomic file_write task"
+        },
+        {
+          "component": "LLMManager",
+          "status": "success",
+          "reason": "生成工具调用所需的决策与思考",
+          "output_summary": "selected file_write"
+        },
+        {
+          "component": "ReActEngine",
+          "status": "active",
+          "reason": "执行ReAct第1轮决策",
+          "output_summary": "tool call required"
+        },
+        {
+          "component": "ToolCaller",
+          "status": "active",
+          "reason": "准备调用并执行文件写入工具",
+          "output_summary": "action=file_write"
+        },
+        {
+          "component": "ErrorTranslator",
+          "status": "skipped",
+          "reason": "当前未发生工具错误，无需转译",
+          "output_summary": "not needed"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L5",
+      "timestamp": "2026-04-21T18:14:39.994424",
+      "execution_time": 4.195524215698242,
+      "processing_log": [
+        "[1] 接收AgentAction",
+        "[2] ToolRegistry: 查找工具",
+        "[3] ParameterValidator: 验证参数",
+        "[4] 错误: file_write 的路径变更为 documents/desktop/周会文档.txt，需与用户原始输入一致且未发现冲突确认流程所需的已存在文件检查信息"
+      ],
+      "component_trace": [
+        {
+          "component": "ToolRegistry",
+          "status": "active",
+          "reason": "接收请求后开始查找可用工具",
+          "output_summary": "已定位到工具 file_write"
+        },
+        {
+          "component": "ParameterValidator",
+          "status": "error",
+          "reason": "参数保真校验未通过，无法确认其与用户原始输入完全一致",
+          "output_summary": "path/content 需要与原始输入严格一致"
+        },
+        {
+          "component": "ToolExecutor",
+          "status": "skipped",
+          "reason": "参数校验失败，未进入执行阶段"
+        },
+        {
+          "component": "ResultFormatter",
+          "status": "skipped",
+          "reason": "由于执行未发生，仅返回错误结果"
+        },
+        {
+          "component": "PermissionManager",
+          "status": "success",
+          "reason": "已检查到用户具备 file_write 权限",
+          "output_summary": "permission granted"
+        },
+        {
+          "component": "ConfirmationManager",
+          "status": "skipped",
+          "reason": "未检测到已存在文件冲突信息，未进入二次确认流程"
+        },
+        {
+          "component": "BashAnalyzer",
+          "status": "skipped",
+          "reason": "当前工具不是 terminal，无需 Bash 命令分类"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L6",
+      "timestamp": "2026-04-21T18:14:44.193579",
+      "execution_time": 4.37706732749939,
+      "processing_log": [
+        "[1] 输入验证: 检测到 operation=environment_prepare, action_type=file_write",
+        "[2] 安全检查: 通过（无代码执行内容）",
+        "[3] SandboxManager: skipped - 当前接口不支持文件写入环境准备",
+        "[4] ResourceLimiter: skipped - 未触发代码执行资源配额",
+        "[5] CodeExecutor: skipped - 请求非代码执行",
+        "[6] DockerController: skipped - 未使用Docker模式",
+        "[7] ExecutionLogger: skipped - 当前上下文仅返回错误结果"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityEnforcer",
+          "status": "success",
+          "reason": "已完成输入级别安全检查，未发现代码执行风险。",
+          "output_summary": "operation=environment_prepare, action_type=file_write"
+        },
+        {
+          "component": "SandboxManager",
+          "status": "skipped",
+          "reason": "当前请求不是代码执行，未创建沙盒环境。"
+        },
+        {
+          "component": "ResourceLimiter",
+          "status": "skipped",
+          "reason": "未进入代码执行阶段，未设置资源限制。"
+        },
+        {
+          "component": "CodeExecutor",
+          "status": "skipped",
+          "reason": "请求不属于代码执行任务，未执行任何代码。"
+        },
+        {
+          "component": "DockerController",
+          "status": "skipped",
+          "reason": "未使用Docker容器模式。"
+        },
+        {
+          "component": "ExecutionLogger",
+          "status": "skipped",
+          "reason": "当前请求被判定为不支持的操作，未记录执行日志。"
+        }
+      ],
+      "error": null
+    }
+  ],
+  "layer_transfers": [
+    {
+      "from_layer": "L1",
+      "to_layer": "L2",
+      "data_type": "StandardEvent",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "帮我在桌面上建个文档，写上今天下午3点开周会",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "30aee144-5dc2-4d44-8592-399ef4809a4b"
+          }
+        }
+      },
+      "timestamp": "2026-04-21T18:14:24.837266"
+    },
+    {
+      "from_layer": "L2",
+      "to_layer": "L3",
+      "data_type": "L3CompleteInput",
+      "data": {
+        "session_context": {
+          "session_id": "c2a3d5b1-8b4a-4a2d-9a5d-3f7f1f2e9c11",
+          "user_id": "test_user_001",
+          "current_query": "帮我在桌面上建个文档，写上今天下午3点开周会",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      },
+      "timestamp": "2026-04-21T18:14:34.467434"
+    },
+    {
+      "from_layer": "L3",
+      "to_layer": "L5",
+      "data_type": "AgentAction",
+      "data": {
+        "agent_action": {
+          "action": "file_write",
+          "action_input": {
+            "path": "documents/desktop/周会文档.txt",
+            "content": "今天下午3点开周会"
+          },
+          "thought": "用户要在桌面创建一个文档并写入指定内容，最合适的工具是file_write；按路径规则将“桌面”转换为documents/desktop/。"
+        }
+      },
+      "timestamp": "2026-04-21T18:14:39.994219"
+    }
+  ]
+}

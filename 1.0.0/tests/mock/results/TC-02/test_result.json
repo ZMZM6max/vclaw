@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-02",
+  "test_name": "读取并总结长文档",
+  "status": "failed",
+  "e2e_status": "failed",
+  "semantic_match": true,
+  "semantic_reason": "",
+  "final_response": null,
+  "execution_time": 30.335964679718018,
+  "layer_count": 5,
+  "error_message": "L5错误: 路径安全检查失败：file_read 仅允许访问 documents/ 下的相对安全路径，当前路径包含非法盘符片段或路径映射不一致，且参数与用户原始输入不一致，请确认",
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-02",
+  "timestamp": "2026-04-21T18:15:19.937700"
+}

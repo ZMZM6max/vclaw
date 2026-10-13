@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-31",
+  "test_name": "飞书鉴权过期",
+  "category": "飞书集成",
+  "priority": "P1",
+  "user_input": "[在飞书App下发指令]",
+  "precondition": "用户的飞书Token刚刚过期",
+  "react_flow": "Thought: 接收到指令，尝试校验权限发现失效",
+  "expected_result": "系统: 拦截操作并要求重新授权。结果: 飞书端回复授权过期提示",
+  "risk_level": "中 - 未校验Token导致被恶意调用",
+  "test_type": "安全",
+  "tags": [
+    "手工"
+  ],
+  "payload": {
+    "channel": "feishu",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "[在飞书App下发指令]"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:28:21.256318"
+}

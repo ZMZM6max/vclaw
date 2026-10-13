@@ -1,0 +1,15 @@
+{
+  "session_id": "verify-session",
+  "messages": [
+    {
+      "role": "user",
+      "content": "验证持久化"
+    },
+    {
+      "role": "assistant",
+      "content": "验证成功"
+    }
+  ],
+  "updated_at": 1777371051.829039,
+  "message_count": 2
+}

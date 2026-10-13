@@ -1,0 +1,37 @@
+{
+  "test_id": "TC-25",
+  "test_name": "非技术语言转化测试",
+  "category": "UX体验",
+  "priority": "P0",
+  "user_input": "[触发网络代理的 502 Bad Gateway 报错]",
+  "precondition": "模拟网络代理服务器故障",
+  "react_flow": "Thought: 发现工具执行返回 HTTP 502 -> Action: 强制要求LLM生成人类友好提示",
+  "expected_result": "系统: 绝对禁止抛出如'502 Gateway Error'等字眼。结果: 回复'网络开了点小差，好像没连上，稍微等一会再试试好吗？'",
+  "risk_level": "高 - 小白用户看到技术报错产生恐惧和信任危机",
+  "test_type": "UX",
+  "tags": [
+    "可自动化",
+    "必过"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "[触发网络代理的 502 Bad Gateway 报错]"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:25:15.504691"
+}

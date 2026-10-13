@@ -1,0 +1,588 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L5 Component: ToolRegistry
+  所属层: L5 - 能力抽象层 (Tools &amp; Capabilities)
+  创建时间: 2024
+  用途: 详细定义工具注册表组件的架构、接口、数据结构与行为规范
+-->
+<ComponentSpec id="L5-TOOL-REGISTRY" name="ToolRegistry" layer="L5" version="1.0">
+
+  <!-- ==================== 1. 基本信息 ==================== -->
+  <Overview>
+    <Description>工具注册表，管理所有可用工具的注册、发现与生命周期。作为L5层的核心枢纽，ToolRegistry维护工具名称到工具实现的映射，支持动态加载、热插拔和元数据查询。</Description>
+    <Role>L5层工具管理中心</Role>
+    <Responsibility>维护全局工具注册表，为L3.ToolCaller和L5其他组件提供工具查找服务</Responsibility>
+  </Overview>
+
+  <!-- ==================== 2. 核心职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">工具注册与注销（动态加载和管理工具）</Item>
+    <Item priority="critical">工具查找与获取（通过名称快速定位工具定义）</Item>
+    <Item priority="high">工具列表查询（返回所有可用工具供LLM使用）</Item>
+    <Item priority="high">工具元数据管理（描述工具功能、参数、权限要求）</Item>
+    <Item priority="medium">工具唯一性校验（禁止同名工具重复注册）</Item>
+    <Item priority="medium">内置工具预注册（系统启动时自动注册默认工具集）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 数据结构 ==================== -->
+  <DataStructures>
+    <Structure name="Tool">
+      <Description>工具定义对象，包含工具的所有元数据和执行引用</Description>
+      <Fields>
+        <Field name="name" type="str" required="true">
+          <Description>工具唯一标识名（英文，小写，下划线分隔）</Description>
+          <Example>python_repl, search_web, file_read</Example>
+          <Constraints>必须以字母开头，只能包含[a-z0-9_]</Constraints>
+        </Field>
+        <Field name="description" type="str" required="true">
+          <Description>工具功能描述（供LLM理解何时使用该工具）</Description>
+          <Example>执行Python代码并返回结果</Example>
+          <Constraints>长度50-500字符，必须清晰说明用途和适用场景</Constraints>
+        </Field>
+        <Field name="parameters" type="dict" required="true">
+          <Description>参数JSON Schema定义，用于LLM生成参数和ParameterValidator校验</Description>
+          <SchemaType>JSON Schema Draft 7</SchemaType>
+          <Example>
+            <![CDATA[
+            {
+              "type": "object",
+              "properties": {
+                "code": {"type": "string", "description": "要执行的Python代码"}
+              },
+              "required": ["code"]
+            }
+            ]]>
+          </Example>
+        </Field>
+        <Field name="handler" type="Callable" required="true">
+          <Description>工具执行函数引用（内部工具）或代理标记（委派至L6的工具）</Description>
+          <Note>对于python_repl/terminal/javascript，handler标记为L6_DELEGATE，由ToolExecutor路由至L6</Note>
+        </Field>
+        <Field name="category" type="str" required="false" default="general">
+          <Description>工具分类标签</Description>
+          <ValidValues>code, file, network, system, search, math, general</ValidValues>
+        </Field>
+        <Field name="requires_confirmation" type="bool" required="false" default="false">
+          <Description>是否默认需要二次确认</Description>
+          <Note>高危工具（如file_delete, terminal）应设为true</Note>
+        </Field>
+        <Field name="timeout_default" type="int" required="false" default="30">
+          <Description>默认执行超时时间（秒）</Description>
+          <Constraints>1 &lt;= timeout &lt;= 300</Constraints>
+        </Field>
+        <Field name="returns" type="dict" required="false">
+          <Description>返回值描述，用于LLM理解工具输出格式</Description>
+          <Example>{"type": "string", "description": "执行结果输出"}</Example>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="ToolRegistryState">
+      <Description>注册表内部状态</Description>
+      <Fields>
+        <Field name="_tools" type="Dict[str, Tool]">
+          <Description>工具名称到Tool对象的映射字典</Description>
+        </Field>
+        <Field name="_categories" type="Dict[str, List[str]]">
+          <Description>分类到工具名称列表的索引</Description>
+        </Field>
+        <Field name="_lock" type="threading.RLock">
+          <Description>线程安全锁，保护并发注册/注销操作</Description>
+        </Field>
+      </Fields>
+    </Structure>
+  </DataStructures>
+
+  <!-- ==================== 4. 接口定义 ==================== -->
+  <Interface>
+    <Method name="register" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="name" type="str" required="true">
+            <Description>工具名称（唯一标识）</Description>
+          </Parameter>
+          <Parameter name="tool" type="Tool" required="true">
+            <Description>工具定义对象</Description>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>
+        <Step>1. 校验name格式（正则：^[a-z][a-z0-9_]*$）</Step>
+        <Step>2. 检查name是否已存在，若存在则抛出ToolAlreadyRegisteredError</Step>
+        <Step>3. 检查注册表是否已满（len(_tools) &gt;= MAX_TOOLS_PER_REGISTRY），若满则抛出RegistryFullError</Step>
+        <Step>4. 校验tool.parameters是否为dict类型</Step>
+        <Step>5. 获取锁，将tool加入_tools字典</Step>
+        <Step>6. 更新_categories索引，释放锁</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="ToolAlreadyRegisteredError">
+          <Description>工具已存在</Description>
+          <ErrorCode>409</ErrorCode>
+        </Exception>
+        <Exception name="InvalidToolDefinitionError">
+          <Description>工具定义不符合规范</Description>
+          <ErrorCode>400</ErrorCode>
+        </Exception>
+      </Exceptions>
+      <Concurrency>线程安全，使用RLock保护</Concurrency>
+    </Method>
+
+    <Method name="unregister" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="name" type="str" required="true">
+            <Description>要注销的工具名称</Description>
+          </Parameter>
+        </Input>
+        <Output type="bool">
+          <Description>是否成功注销（不存在返回False）</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 获取锁</Step>
+        <Step>2. 若name存在于_tools，删除并更新_categories索引</Step>
+        <Step>3. 释放锁</Step>
+      </Behavior>
+      <Concurrency>线程安全</Concurrency>
+    </Method>
+
+    <Method name="get" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="name" type="str" required="true">
+            <Description>工具名称</Description>
+          </Parameter>
+        </Input>
+        <Output type="Optional[Tool]">
+          <Description>工具定义对象，不存在返回None</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 直接从_tools字典获取（O(1)）</Step>
+        <Step>2. 返回Tool对象或None</Step>
+      </Behavior>
+      <Performance>常数时间复杂度O(1)</Performance>
+    </Method>
+
+    <Method name="list_tools" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="category" type="Optional[str]" required="false">
+            <Description>按分类筛选</Description>
+          </Parameter>
+          <Parameter name="include_internal" type="bool" required="false" default="false">
+            <Description>是否包含内部工具（如L6_DELEGATE标记的工具）</Description>
+          </Parameter>
+        </Input>
+        <Output type="List[Tool]">
+          <Description>工具定义列表</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 若指定category，从_categories索引获取工具列表</Step>
+        <Step>2. 否则返回所有工具</Step>
+        <Step>3. 根据include_internal过滤内部标记</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="get_available_tools_for_llm" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="user_permissions" type="List[str]" required="false" default="[]">
+            <Description>用户权限列表，用于PermissionManager过滤</Description>
+          </Parameter>
+        </Input>
+        <Output type="List[dict]">
+          <Description>OpenAI Function Calling格式的工具列表</Description>
+          <Schema>
+            <![CDATA[
+            [
+              {
+                "type": "function",
+                "function": {
+                  "name": "python_repl",
+                  "description": "执行Python代码",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {...},
+                    "required": [...]
+                  }
+                }
+              }
+            ]
+            ]]>
+          </Schema>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 获取所有非内部工具</Step>
+        <Step>2. 调用PermissionManager.check_permission过滤权限</Step>
+        <Step>3. 转换为OpenAI Function Calling格式</Step>
+        <Step>4. 返回格式化后的工具定义列表</Step>
+      </Behavior>
+      <Note>此方法是L3.ToolCaller.format_tools_for_llm()的底层实现</Note>
+    </Method>
+
+    <Method name="has_tool" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="name" type="str" required="true"/>
+        </Input>
+        <Output type="bool"/>
+      </Signature>
+      <Description>检查工具是否已注册</Description>
+      <Performance>O(1)</Performance>
+    </Method>
+
+    <Method name="clear" visibility="public">
+      <Signature>
+        <Input/>
+        <Output type="None"/>
+      </Signature>
+      <Description>清空所有注册的工具（主要用于测试）</Description>
+      <Warning>生产环境慎用，会移除所有工具包括内置工具</Warning>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 内置工具定义 ==================== -->
+  <BuiltInTools>
+    <Tool name="python_repl">
+      <Description>执行Python代码片段，支持数学计算、数据处理、文本操作等</Description>
+      <Category>code</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "要执行的Python代码"
+            }
+          },
+          "required": ["code"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>L6_DELEGATE</HandlerType>
+      <ExecutionPath>L5.ToolExecutor → L6.SandboxManager → L6.CodeExecutor</ExecutionPath>
+      <TimeoutDefault>30</TimeoutDefault>
+      <RequiresConfirmation>false</RequiresConfirmation>
+    </Tool>
+
+    <Tool name="search_web">
+      <Description>使用DuckDuckGo搜索网络信息，获取实时网页内容</Description>
+      <Category>network</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "搜索关键词"
+            }
+          },
+          "required": ["query"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>INTERNAL</HandlerType>
+      <Implementation>调用duckduckgo-search库</Implementation>
+      <TimeoutDefault>30</TimeoutDefault>
+      <RequiresConfirmation>false</RequiresConfirmation>
+    </Tool>
+
+    <Tool name="file_read">
+      <Description>读取指定路径的文件内容，支持文本文件</Description>
+      <Category>file</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "文件路径（相对或绝对路径）"
+            }
+          },
+          "required": ["path"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>INTERNAL</HandlerType>
+      <Implementation>Python内置open()读取，受沙盒路径限制</Implementation>
+      <TimeoutDefault>10</TimeoutDefault>
+      <RequiresConfirmation>false</RequiresConfirmation>
+    </Tool>
+
+    <Tool name="file_write">
+      <Description>将内容写入指定路径的文件，支持新建和覆盖</Description>
+      <Category>file</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "文件路径"
+            },
+            "content": {
+              "type": "string",
+              "description": "要写入的文件内容"
+            }
+          },
+          "required": ["path", "content"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>INTERNAL</HandlerType>
+      <Implementation>Python内置open()写入，受沙盒路径限制</Implementation>
+      <TimeoutDefault>10</TimeoutDefault>
+      <RequiresConfirmation>true</RequiresConfirmation>
+      <PreExecutionChecks>
+        <Check>目标路径是否已存在（存在则触发ConfirmationManager）</Check>
+      </PreExecutionChecks>
+    </Tool>
+
+    <Tool name="file_delete">
+      <Description>删除指定路径的文件或清空目录</Description>
+      <Category>file</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "要删除的文件或目录路径"
+            }
+          },
+          "required": ["path"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>INTERNAL</HandlerType>
+      <Implementation>os.remove / shutil.rmtree，受沙盒路径限制</Implementation>
+      <TimeoutDefault>10</TimeoutDefault>
+      <RequiresConfirmation>true</RequiresConfirmation>
+      <RiskLevel>high</RiskLevel>
+    </Tool>
+
+    <Tool name="terminal">
+      <Description>执行终端命令（bash/shell），支持文件操作、系统命令等</Description>
+      <Category>system</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "要执行的终端命令"
+            }
+          },
+          "required": ["command"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>L6_DELEGATE</HandlerType>
+      <ExecutionPath>L5.ToolExecutor → L6.SandboxManager → L6.DockerController.exec_in_container()</ExecutionPath>
+      <TimeoutDefault>30</TimeoutDefault>
+      <RequiresConfirmation>true</RequiresConfirmation>
+      <PreExecutionChecks>
+        <Check>L5.BashAnalyzer分析命令风险等级</Check>
+        <Check>WRITE/NETWORK/EXEC类型路由到ConfirmationManager</Check>
+      </PreExecutionChecks>
+    </Tool>
+
+    <Tool name="calculator">
+      <Description>执行数学计算表达式，支持基本运算、函数、变量</Description>
+      <Category>math</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "数学表达式，如 \"1 + 2 * 3\" 或 \"sin(pi/2)\""
+            }
+          },
+          "required": ["expression"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>INTERNAL</HandlerType>
+      <Implementation>使用Python eval（受限安全环境）或ast.literal_eval</Implementation>
+      <TimeoutDefault>5</TimeoutDefault>
+      <RequiresConfirmation>false</RequiresConfirmation>
+    </Tool>
+
+    <Tool name="file_search">
+      <Description>模糊文件搜索，根据关键词或部分文件名查找文件位置</Description>
+      <Category>search</Category>
+      <ParametersSchema>
+        <![CDATA[
+        {
+          "type": "object",
+          "properties": {
+            "keyword": {
+              "type": "string",
+              "description": "搜索关键词或部分文件名"
+            },
+            "directory": {
+              "type": "string",
+              "description": "可选：搜索目录（默认documents/）",
+              "default": "documents/"
+            }
+          },
+          "required": ["keyword"]
+        }
+        ]]>
+      </ParametersSchema>
+      <HandlerType>INTERNAL</HandlerType>
+      <Implementation>os.walk遍历目录，fnmatch匹配文件名</Implementation>
+      <TimeoutDefault>15</TimeoutDefault>
+      <RequiresConfirmation>false</RequiresConfirmation>
+      <TriggerKeywords>找, 查找, 搜索, 定位, 有没有, 在哪</TriggerKeywords>
+      <Note>当用户意图为文件查询但路径不明确时，优先调用file_search而非直接反问用户</Note>
+    </Tool>
+  </BuiltInTools>
+
+  <!-- ==================== 6. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">L3.ToolCaller调用ToolRegistry.get(name)查找工具</Step>
+    <Step order="2">ToolRegistry返回Tool定义（含handler引用或L6_DELEGATE标记）</Step>
+    <Step order="3">若工具不存在，返回None，由ToolExecutor抛出ToolNotFoundError</Step>
+    <Step order="4">L3.LLMManager调用ToolRegistry.get_available_tools_for_llm()获取工具列表</Step>
+    <Step order="5">ToolRegistry遍历所有工具，转换为OpenAI格式返回</Step>
+  </DataFlow>
+
+  <!-- ==================== 7. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Consumer component="L3.ToolCaller">
+        <Usage>查找工具定义，执行工具调用链</Usage>
+        <Interface>ToolRegistry.get(name)</Interface>
+      </Consumer>
+      <Consumer component="L3.LLMManager">
+        <Usage>获取可用工具列表供LLM决策</Usage>
+        <Interface>ToolRegistry.get_available_tools_for_llm()</Interface>
+      </Consumer>
+    </Upstream>
+
+    <Downstream>
+      <Dependency component="L5.PermissionManager">
+        <Usage>get_available_tools_for_llm()内部调用PermissionManager过滤工具</Usage>
+        <CouplingType>可选依赖（若无权限系统则返回全部）</CouplingType>
+      </Dependency>
+    </Downstream>
+
+    <InternalDependencies>
+      <Dependency>models.AgentAction - 工具调用指令（间接使用）</Dependency>
+    </InternalDependencies>
+  </Coupling>
+
+  <!-- ==================== 8. 配置项 ==================== -->
+  <Configuration>
+    <Config name="BUILTIN_TOOLS_AUTO_REGISTER" type="bool" default="true">
+      <Description>系统启动时是否自动注册内置工具</Description>
+    </Config>
+    <Config name="TOOL_NAME_PATTERN" type="str" default="^[a-z][a-z0-9_]*$">
+      <Description>工具名称合法性正则表达式</Description>
+    </Config>
+    <Config name="MAX_TOOL_DESCRIPTION_LENGTH" type="int" default="500">
+      <Description>工具描述最大长度</Description>
+    </Config>
+    <Config name="MAX_TOOLS_PER_REGISTRY" type="int" default="100">
+      <Description>单个注册表最大工具数量（防止内存泄漏）</Description>
+    </Config>
+  </Configuration>
+
+  <!-- ==================== 9. 异常定义 ==================== -->
+  <Exceptions>
+    <Exception name="ToolAlreadyRegisteredError">
+      <Description>尝试注册已存在的工具名称</Description>
+      <ErrorCode>409</ErrorCode>
+      <Recovery>使用unregister()移除旧工具后重新注册，或使用不同名称</Recovery>
+    </Exception>
+    <Exception name="InvalidToolDefinitionError">
+      <Description>工具定义不符合规范（缺少必填字段、参数Schema非法等）</Description>
+      <ErrorCode>400</ErrorCode>
+    </Exception>
+    <Exception name="RegistryFullError">
+      <Description>注册表已满，达到MAX_TOOLS_PER_REGISTRY限制</Description>
+      <ErrorCode>413</ErrorCode>
+    </Exception>
+  </Exceptions>
+
+  <!-- ==================== 10. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="TR-001">
+      <Name>注册与获取工具</Name>
+      <Steps>
+        <Step>创建ToolRegistry实例</Step>
+        <Step>注册测试工具test_tool</Step>
+        <Step>调用get("test_tool")验证返回</Step>
+        <Step>验证返回的Tool对象字段完整</Step>
+      </Steps>
+      <Expected>成功注册并能正确获取工具定义</Expected>
+    </TestCase>
+
+    <TestCase id="TR-002">
+      <Name>重复注册检测</Name>
+      <Steps>
+        <Step>注册工具duplicate_tool</Step>
+        <Step>再次注册同名工具</Step>
+      </Steps>
+      <Expected>抛出ToolAlreadyRegisteredError</Expected>
+    </TestCase>
+
+    <TestCase id="TR-003">
+      <Name>获取不存在的工具</Name>
+      <Steps>
+        <Step>调用get("nonexistent_tool")</Step>
+      </Steps>
+      <Expected>返回None</Expected>
+    </TestCase>
+
+    <TestCase id="TR-004">
+      <Name>内置工具自动注册</Name>
+      <Steps>
+        <Step>创建ToolRegistry（BUILTIN_TOOLS_AUTO_REGISTER=true）</Step>
+        <Step>调用list_tools()</Step>
+      </Steps>
+      <Expected>返回所有内置工具（python_repl, search_web等）</Expected>
+    </TestCase>
+
+    <TestCase id="TR-005">
+      <Name>LLM格式工具列表</Name>
+      <Steps>
+        <Step>注册多个测试工具</Step>
+        <Step>调用get_available_tools_for_llm()</Step>
+      </Steps>
+      <Expected>返回符合OpenAI Function Calling格式的列表</Expected>
+    </TestCase>
+
+    <TestCase id="TR-006">
+      <Name>线程安全并发注册</Name>
+      <Steps>
+        <Step>创建ToolRegistry</Step>
+        <Step>启动10个线程同时注册不同工具</Step>
+        <Step>验证所有工具均正确注册</Step>
+      </Steps>
+      <Expected>无竞态条件，所有工具正确注册</Expected>
+    </TestCase>
+  </Testing>
+
+  <!-- ==================== 11. 实现提示 ==================== -->
+  <ImplementationNotes>
+    <Note>ToolRegistry应为单例模式（或依赖注入的共享实例），确保全系统工具定义一致</Note>
+    <Note>内置工具在__init__中预注册，避免每次请求重复初始化</Note>
+    <Note>handler引用建议使用弱引用（weakref）或函数标识符而非直接绑定，避免循环引用</Note>
+    <Note>L6_DELEGATE标记的工具不应在Registry中存储实际执行函数，由ToolExecutor统一路由</Note>
+  </ImplementationNotes>
+
+</ComponentSpec>

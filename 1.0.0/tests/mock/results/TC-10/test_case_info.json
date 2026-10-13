@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-10",
+  "test_name": "虚构文件内容",
+  "category": "幻觉检测",
+  "priority": "P1",
+  "user_input": "总结一下桌面上那个空文件《测试.docx》",
+  "precondition": "存在该文件，但大小为0KB（完全空白）",
+  "react_flow": "Thought: File_Read 读取文件 -> Observation: 内容为空 -> Thought: 必须如实反馈，不能编造摘要",
+  "expected_result": "系统: 正常读取，获取到空字符串。结果: 回复'这个文档里面什么都没有写哦，是空的。'",
+  "risk_level": "中 - 大模型强行编造一段废话摘要",
+  "test_type": "功能",
+  "tags": [
+    "可自动化"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "总结一下桌面上那个空文件《测试.docx》"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:18:35.832406"
+}

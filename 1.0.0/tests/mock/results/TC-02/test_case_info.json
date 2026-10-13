@@ -1,0 +1,37 @@
+{
+  "test_id": "TC-02",
+  "test_name": "读取并总结长文档",
+  "category": "正常功能",
+  "priority": "P0",
+  "user_input": "帮我看看D盘那个《Q3财报.pdf》里面重点说了啥？",
+  "precondition": "D盘存在该PDF文件，字数超过1万字",
+  "react_flow": "Thought: 需定位文件->读取内容->长文本切片总结 -> Action: File_Read 获取内容 -> Observation: 摘要生成完毕",
+  "expected_result": "系统: 加载文件，调用摘要Prompt。结果: 输出分段、无术语的白话文总结（不超过300字）",
+  "risk_level": "中 - 文件过大致LLM上下文溢出或OOM",
+  "test_type": "功能",
+  "tags": [
+    "可自动化",
+    "必过"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "帮我看看D盘那个《Q3财报.pdf》里面重点说了啥？"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:14:49.601080"
+}

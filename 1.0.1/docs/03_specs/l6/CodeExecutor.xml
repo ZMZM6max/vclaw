@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L6 Component: CodeExecutor
+  所属层级: L6 RuntimeEnvironment
+  创建时间: 2026-04-23
+  用途: 详细定义代码执行器的架构、支持语言、执行流程与测试规范
+-->
+<Component id="L6.CodeExecutor" name="CodeExecutor" version="1.0">
+
+  <!-- ==================== 1. 概述 ==================== -->
+  <Overview>
+    <Purpose>代码执行器是L6层的语言无关代码执行入口，负责将代码字符串交给对应的运行时环境执行，并返回标准化的执行结果。</Purpose>
+    <Role>语言调度的门面（Facade），本身不直接执行代码，而是通过RuntimeInterface委托给底层沙盒。</Role>
+    <LayerPosition>L6中间层，被上层ToolExecutor或直接用户调用</LayerPosition>
+  </Overview>
+
+  <!-- ==================== 2. 职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">语言校验：确保请求的语言在支持列表中</Item>
+    <Item priority="critical">执行委托：将代码和参数传递给RuntimeInterface.run_code()</Item>
+    <Item priority="high">结果透传：将ExecutionResult原样返回给调用方，不做额外处理</Item>
+    <Item priority="medium">运行时管理：持有RuntimeInterface实例，支持依赖注入和Mock测试</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 支持语言 ==================== -->
+  <SupportedLanguages>
+    <Language name="python">
+      <Version>3.11</Version>
+      <Interpreter>CPython</Interpreter>
+      <DockerImage>python:3.11-alpine</DockerImage>
+      <FileExtension>.py</FileExtension>
+      <ExecutionCommand>python /sandbox/script.py</ExecutionCommand>
+      <Notes>
+        <Note>通过SecurityEnforcer禁止os.system、subprocess、eval、exec、__import__等危险模式</Note>
+        <Note>支持标准库数学、字符串、数据结构操作</Note>
+      </Notes>
+    </Language>
+    <Language name="javascript">
+      <Version>ES2022</Version>
+      <Interpreter>Node.js</Interpreter>
+      <DockerImage>node:18-alpine</DockerImage>
+      <FileExtension>.js</FileExtension>
+      <ExecutionCommand>node /sandbox/script.js</ExecutionCommand>
+      <Notes>
+        <Note>禁止child_process、fs模块的写操作（通过容器只读文件系统限制）</Note>
+        <Note>支持ES6+语法（async/await, arrow functions, destructuring）</Note>
+      </Notes>
+    </Language>
+    <Language name="bash">
+      <Version>5.x (Alpine ash兼容)</Version>
+      <Interpreter>bash / ash</Interpreter>
+      <DockerImage>alpine:latest</DockerImage>
+      <FileExtension>.sh</FileExtension>
+      <ExecutionCommand>bash /sandbox/script.sh</ExecutionCommand>
+      <Notes>
+        <Note>危险命令（rm -rf /, mkfs, dd等）需由L5层的BashAnalyzer和SecurityEnforcer双重拦截</Note>
+        <Note>网络命令（curl, wget, ssh）默认被Docker network_mode=none阻断</Note>
+      </Notes>
+    </Language>
+  </SupportedLanguages>
+
+  <!-- ==================== 4. 接口规范 ==================== -->
+  <Interface>
+    <Method name="__init__">
+      <Signature>
+        <Input>
+          <Parameter name="runtime" type="RuntimeInterface" required="false">
+            <Description>运行时接口实例。默认为RuntimeEnvironment()</Description>
+          </Parameter>
+        </Input>
+        <Output type="CodeExecutor">CodeExecutor实例</Output>
+      </Signature>
+      <Purpose>支持依赖注入，便于单元测试时传入Mock RuntimeInterface</Purpose>
+    </Method>
+
+    <Method name="run">
+      <Signature>
+        <Input>
+          <Parameter name="language" type="str" required="true">
+            <Description>编程语言</Description>
+            <ValidValues>python, javascript, bash</ValidValues>
+          </Parameter>
+          <Parameter name="code" type="str" required="true">
+            <Description>代码字符串</Description>
+            <Constraints>非空，最大100KB（由SecurityEnforcer前置校验）</Constraints>
+          </Parameter>
+          <Parameter name="timeout" type="int" required="false" default="30">
+            <Description>执行超时时间（秒）</Description>
+            <Constraints>1 &lt;= timeout &lt;= 300</Constraints>
+          </Parameter>
+        </Input>
+        <Output type="ExecutionResult">
+          <Description>标准执行结果，包含exit_code、stdout、stderr、execution_time、resource_usage</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 检查language是否在SUPPORTED_LANGUAGES中，不在则抛出UnsupportedLanguageError</Step>
+        <Step>2. 调用self.runtime.run_code(language, code, timeout=timeout)</Step>
+        <Step>3. 将ExecutionResult原样返回</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="UnsupportedLanguageError">语言不在支持列表中</Exception>
+      </Exceptions>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 执行流程 ==================== -->
+  <ExecutionFlow>
+    <Step order="1">CodeExecutor.run(language, code, timeout) 接收请求</Step>
+    <Step order="2">校验language ∈ {python, javascript, bash}</Step>
+    <Step order="3">调用 RuntimeInterface.run_code(language, code, timeout)</Step>
+    <Step order="4">RuntimeEnvironment 调用 SecurityEnforcer.validate_language(language)</Step>
+    <Step order="5">RuntimeEnvironment 调用 SecurityEnforcer.check_code(code)</Step>
+    <Step order="6">RuntimeEnvironment 调用 SandboxManager.create() 创建环境</Step>
+    <Step order="7">RuntimeEnvironment 调用 SandboxManager.execute() 执行代码</Step>
+    <Step order="8">SandboxManager 调用 DockerController 创建并执行容器</Step>
+    <Step order="9">容器退出，结果沿调用链返回</Step>
+    <Step order="10">RuntimeEnvironment 在finally中调用 SandboxManager.destroy()</Step>
+    <Step order="11">ExecutionResult 返回到 CodeExecutor.run()</Step>
+    <Step order="12">CodeExecutor 将结果返回给调用方</Step>
+  </ExecutionFlow>
+
+  <!-- ==================== 6. 配置项 ==================== -->
+  <Configuration>
+    <ConfigItem name="SUPPORTED_LANGUAGES">
+      <Description>支持的语言集合</Description>
+      <Value>{"python", "javascript", "bash"}</Value>
+      <ReadOnly>true</ReadOnly>
+    </ConfigItem>
+  </Configuration>
+
+  <!-- ==================== 7. 异常与错误处理 ==================== -->
+  <ErrorHandling>
+    <Scenario name="unsupported_language">
+      <Trigger>传入language="ruby"或"go"等不支持的语言</Trigger>
+      <Action>抛出UnsupportedLanguageError，消息包含支持的语言列表</Action>
+    </Scenario>
+    <Scenario name="runtime_not_available">
+      <Trigger>runtime实例为None或不可用</Trigger>
+      <Action>在__init__时初始化默认RuntimeEnvironment；若初始化失败抛出SandboxCreationError</Action>
+    </Scenario>
+  </ErrorHandling>
+
+  <!-- ==================== 8. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component>L5.ToolExecutor / ToolsCapabilities</Component>
+      <Relation>ToolExecutor对python_repl、javascript类工具调用CodeExecutor.run()</Relation>
+    </Upstream>
+    <Upstream>
+      <Component>测试用例</Component>
+      <Relation>单元测试通过注入Mock RuntimeInterface隔离Docker依赖</Relation>
+    </Upstream>
+    <Downstream>
+      <Component>RuntimeInterface / RuntimeEnvironment</Component>
+      <Relation>CodeExecutor持有RuntimeInterface实例，所有执行通过此接口委托</Relation>
+    </Downstream>
+    <Dependencies>
+      <Internal>interfaces.RuntimeInterface</Internal>
+      <Internal>core.models.ExecutionResult</Internal>
+      <Internal>core.exceptions.UnsupportedLanguageError</Internal>
+    </Dependencies>
+  </Coupling>
+
+  <!-- ==================== 9. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="CE_001">
+      <Name>执行Python代码成功</Name>
+      <Steps>
+        <Step>CodeExecutor(runtime=mock_runtime).run("python", "print(2+2)")</Step>
+      </Steps>
+      <Expected>mock_runtime.run_code被调用，参数为("python", "print(2+2)", timeout=30)</Expected>
+    </TestCase>
+    <TestCase id="CE_002">
+      <Name>不支持的语言</Name>
+      <Steps>
+        <Step>CodeExecutor().run("ruby", "puts 1")</Step>
+      </Steps>
+      <Expected>抛出UnsupportedLanguageError</Expected>
+    </TestCase>
+    <TestCase id="CE_003">
+      <Name>默认RuntimeEnvironment初始化</Name>
+      <Steps>
+        <Step>executor = CodeExecutor()</Step>
+        <Step>检查executor.runtime类型</Step>
+      </Steps>
+      <Expected>runtime为RuntimeEnvironment实例</Expected>
+    </TestCase>
+    <TestCase id="CE_004">
+      <Name>超时参数传递</Name>
+      <Steps>
+        <Step>CodeExecutor(runtime=mock_runtime).run("bash", "echo hello", timeout=10)</Step>
+      </Steps>
+      <Expected>mock_runtime.run_code被传入timeout=10</Expected>
+    </TestCase>
+  </Testing>
+
+</Component>

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  vclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vclaw-api
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - VECTOR_STORE_TYPE=${VECTOR_STORE_TYPE:-memory}
+      - CHROMA_PERSIST_DIR=/app/chroma_db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-60}
+      - SANDBOX_TIMEOUT=${SANDBOX_TIMEOUT:-30}
+    volumes:
+      - ./chroma_db:/app/chroma_db  # Persist ChromaDB data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: vclaw-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    profiles:
+      - with-redis
+
+volumes:
+  redis_data:

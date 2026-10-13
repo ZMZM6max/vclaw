@@ -1,0 +1,116 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:16:00.261710",
+  "execution_time": 4.232844829559326,
+  "input_data": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把那个文件删了"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "success",
+    "standard_event": {
+      "channel": "telegram",
+      "user_id": "test_user_001",
+      "content": "把那个文件删了",
+      "timestamp": 1704067200.0,
+      "metadata": {
+        "source": "telegram",
+        "message_id": 1,
+        "client_ip": "192.168.1.1"
+      }
+    },
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: telegram",
+      "[2] ProtocolAdapter解析数据",
+      "[3] DataValidator验证字段完整性",
+      "[4] EventNormalizer转换为StandardEvent",
+      "[5] 验证通过，返回结果"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "success",
+        "reason": "已根据channel=telegram完成协议适配与字段提取",
+        "output_summary": "提取user_id、content、timestamp及telegram元数据"
+      },
+      {
+        "component": "DataValidator",
+        "status": "success",
+        "reason": "数据字段完整且通过安全与时间范围检查",
+        "output_summary": "user_id长度合规，content非空，timestamp有效"
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "success",
+        "reason": "已转换为StandardEvent统一结构",
+        "output_summary": "生成标准事件对象并保留渠道元数据"
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "skipped",
+        "reason": "本次处理未发生错误，未触发重试机制"
+      },
+      {
+        "component": "SessionManager",
+        "status": "success",
+        "reason": "已创建或复用会话映射以支持上下文关联",
+        "output_summary": "使用client_ip与user_id建立会话关联"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: telegram",
+    "[2] ProtocolAdapter解析数据",
+    "[3] DataValidator验证字段完整性",
+    "[4] EventNormalizer转换为StandardEvent",
+    "[5] 验证通过，返回结果"
+  ],
+  "component_trace": [
+    {
+      "component": "ProtocolAdapter",
+      "status": "success",
+      "reason": "已根据channel=telegram完成协议适配与字段提取",
+      "output_summary": "提取user_id、content、timestamp及telegram元数据"
+    },
+    {
+      "component": "DataValidator",
+      "status": "success",
+      "reason": "数据字段完整且通过安全与时间范围检查",
+      "output_summary": "user_id长度合规，content非空，timestamp有效"
+    },
+    {
+      "component": "EventNormalizer",
+      "status": "success",
+      "reason": "已转换为StandardEvent统一结构",
+      "output_summary": "生成标准事件对象并保留渠道元数据"
+    },
+    {
+      "component": "ErrorHandler",
+      "status": "skipped",
+      "reason": "本次处理未发生错误，未触发重试机制"
+    },
+    {
+      "component": "SessionManager",
+      "status": "success",
+      "reason": "已创建或复用会话映射以支持上下文关联",
+      "output_summary": "使用client_ip与user_id建立会话关联"
+    }
+  ],
+  "error": null
+}

@@ -1,0 +1,92 @@
+{
+  "request_id": "tc-25",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:25:22.416864",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "[触发网络代理的 502 Bad Gateway 报错]",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "c0c49f88-31ed-46bf-9bc0-cb53cf03ec85"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:25:33.786018",
+      "data": {
+        "session_context": {
+          "session_id": "550e8400-e29b-41d4-a716-446655440000",
+          "user_id": "test_user_001",
+          "current_query": "[触发网络代理的 502 Bad Gateway 报错]",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L2",
+      "type": "ResponseForSession",
+      "timestamp": "2026-04-21T18:25:42.331567",
+      "data": {
+        "response": "这看起来是网络代理返回的 502 Bad Gateway 错误，通常表示上游服务暂时不可用或网关连接异常。建议您稍后重试，或检查代理/上游服务是否正常运行；如果这是您的系统，我也可以继续帮您排查常见原因。",
+        "session_id": "550e8400-e29b-41d4-a716-446655440000"
+      }
+    },
+    {
+      "step": 4,
+      "from": "L2",
+      "to": "L1",
+      "type": "ResponseWithHistory",
+      "timestamp": "2026-04-21T18:25:42.331626",
+      "data": {
+        "response": "这看起来是网络代理返回的 502 Bad Gateway 错误，通常表示上游服务暂时不可用或网关连接异常。建议您稍后重试，或检查代理/上游服务是否正常运行；如果这是您的系统，我也可以继续帮您排查常见原因。",
+        "session_id": "550e8400-e29b-41d4-a716-446655440000",
+        "history_updated": true,
+        "history_length": 2
+      }
+    },
+    {
+      "step": 5,
+      "from": "L1",
+      "to": "User",
+      "type": "FinalOutput",
+      "timestamp": "2026-04-21T18:25:42.331680",
+      "data": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "output": "这看起来是网络代理返回的 502 Bad Gateway 错误，通常表示上游服务暂时不可用或网关连接异常。建议您稍后重试，或检查代理/上游服务是否正常运行；如果这是您的系统，我也可以继续帮您排查常见原因。",
+        "format": "telegram"
+      }
+    }
+  ]
+}

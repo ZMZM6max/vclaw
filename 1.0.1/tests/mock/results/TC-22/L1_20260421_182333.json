@@ -1,0 +1,84 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:23:27.957318",
+  "execution_time": 5.589305639266968,
+  "input_data": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把那个1G的视频文件移动到桌面"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "success",
+    "standard_event": {
+      "channel": "telegram",
+      "user_id": "test_user_001",
+      "content": "把那个1G的视频文件移动到桌面",
+      "timestamp": 1704067200.0,
+      "metadata": {
+        "source": "telegram",
+        "message_id": 1
+      }
+    },
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: telegram",
+      "[2] ProtocolAdapter解析数据",
+      "[3] DataValidator验证字段完整性",
+      "[4] EventNormalizer转换为StandardEvent",
+      "[5] 验证通过，返回结果"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "success",
+        "reason": "已根据channel=telegram选择TelegramAdapter并完成协议解析。",
+        "output_summary": "提取message.from.id、message.text、message.date与message_id。"
+      },
+      {
+        "component": "DataValidator",
+        "status": "success",
+        "reason": "字段完整且满足基础校验要求。",
+        "output_summary": "channel合法，user_id非空且长度合规，content非空，timestamp有效。"
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "success",
+        "reason": "已将Telegram原始结构转换为StandardEvent。",
+        "output_summary": "生成standard_event，保留telegram来源元数据。"
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "skipped",
+        "reason": "本次处理未发生错误，因此未触发重试或退避流程。"
+      },
+      {
+        "component": "SessionManager",
+        "status": "success",
+        "reason": "已创建或复用当前请求的会话映射。",
+        "output_summary": "会话上下文绑定到client_ip=192.168.1.1。"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: telegram",
+    "[2] ProtocolAdapter解析数据",
+    "[3] DataValidator验证字段完整性",
+    "[4] EventNormalizer转换为StandardEvent",
+    "[5] 验证通过，返回结果"
+  ],
+  "error": null
+}

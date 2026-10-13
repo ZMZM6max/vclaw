@@ -1,0 +1,23 @@
+{
+  "session_id": "d3249b19-937e-4e5d-8025-4ef0e660839d",
+  "messages": [
+    {
+      "role": "user",
+      "content": "计算10的平方"
+    },
+    {
+      "role": "assistant",
+      "content": "100"
+    },
+    {
+      "role": "user",
+      "content": "计算10的平方"
+    },
+    {
+      "role": "assistant",
+      "content": "100"
+    }
+  ],
+  "updated_at": 1776242471.349275,
+  "message_count": 4
+}

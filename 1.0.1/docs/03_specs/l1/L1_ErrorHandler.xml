@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L1 Component: ErrorHandler
+  拆分自: L1_UserInteraction.xml
+  用途: 错误处理器，管理 L1 层传输/协议级异常和重试逻辑，同时接收 L3.ErrorTranslator 经 L2 回流的业务错误进行规范化输出
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L1_UserInteraction.xml
+  src/l1/docs/L1_UserInteraction.xml
+-->
+<Component id="L1.ErrorHandler" name="ErrorHandler" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>错误处理器，管理 L1 层传输/协议级异常和重试逻辑，同时接收 L3.ErrorTranslator 经 L2 回流的业务错误进行规范化输出</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">L1 内部错误处理：连接失败、协议解析错误、数据格式异常等触发指数退避重试</Item>
+      <Item priority="high">业务错误回流处理：接收 L3.ErrorTranslator 经 L2 转译后的错误文本，按渠道协议格式化最终输出</Item>
+      <Item priority="medium">禁止介入业务语义错误的转译——此类错误由 L3.ErrorTranslator 处理</Item>
+    </Responsibilities>
+
+    <Scope>
+      <Item>仅处理 L1 层内部错误：连接失败、协议解析错误、数据格式异常</Item>
+      <Item>禁止介入业务语义错误的转译——此类错误由 L3.ErrorTranslator 处理</Item>
+      <Item>负责接收 L3.ErrorTranslator 经 L2 回流的业务错误，进行协议级格式化（HTTP 状态码、Telegram 消息结构等）</Item>
+    </Scope>
+
+    <ErrorReturnPath>
+      <Step>L3.ErrorTranslator 将业务错误转译为中文友好提示</Step>
+      <Step>L2 将转译后的错误文本作为响应体回传</Step>
+      <Step>L1.ErrorHandler 根据渠道类型（Telegram/HTTP/WebSocket）格式化最终输出结构</Step>
+      <Note>分工：ErrorTranslator = 语义转译（中文），ErrorHandler = 协议格式化（状态码+消息结构）</Note>
+    </ErrorReturnPath>
+
+    <RetryPolicy>
+      <MaxRetries>3</MaxRetries>
+      <BackoffStrategy>exponential</BackoffStrategy>
+      <InitialDelay>1000ms</InitialDelay>
+      <MaxDelay>60000ms</MaxDelay>
+    </RetryPolicy>
+
+    <DataFlow>
+      <Step order="1" type="L1_internal_error">L1 内部操作（如 parse、validate、normalize）抛出异常</Step>
+      <Step order="2">execute_with_retry 捕获指定类型的异常</Step>
+      <Step order="3">按指数退避策略等待后重试（初始尝试 + 最多 3 次重试，每次延迟翻倍，上限 60 秒）</Step>
+      <Step order="4" condition="重试耗尽">抛出最后一次捕获的异常</Step>
+      <Step order="5" type="L3_business_error">L3.ErrorTranslator 生成业务错误 dict → 经 L2 回流到 L1</Step>
+      <Step order="6">handle_error 根据 error 类型和 channel 路由到对应格式化方法</Step>
+      <Step order="7">返回渠道特定的响应结构（Telegram dict / WebSocket dict / Webhook tuple）</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="execute_with_retry">
+      <Signature>execute_with_retry(operation: Callable, *args, retryable_exceptions: tuple = (Exception,), **kwargs) -&gt; Any</Signature>
+      <Description>对任意可调用对象执行带重试逻辑的操作。适用于 L1 内部不稳定操作（如网络解析）</Description>
+      <Input>
+        <Parameter name="operation" type="Callable" required="true">
+          <Description>需要执行的可调用对象</Description>
+        </Parameter>
+        <Parameter name="*args" type="Any">
+          <Description>operation 的位置参数</Description>
+        </Parameter>
+        <Parameter name="retryable_exceptions" type="tuple" default="(Exception,)">
+          <Description>触发重试的异常类型元组</Description>
+        </Parameter>
+        <Parameter name="**kwargs" type="Any">
+          <Description>operation 的关键字参数</Description>
+        </Parameter>
+      </Input>
+      <Output type="Any">
+        <Description>operation 的返回值</Description>
+      </Output>
+      <Exceptions>
+        <Exception name="Exception">
+          <Description>所有重试次数耗尽后，抛出最后一次捕获的异常</Description>
+        </Exception>
+      </Exceptions>
+    </PrimaryMethod>
+
+    <SecondaryMethod name="handle_error">
+      <Signature>handle_error(error: Any, channel: str, metadata: Optional[Dict] = None) -&gt; Any</Signature>
+      <Description>统一错误路由方法。支持 L1 内部异常（Exception）和 L3 业务错误（dict）两类输入</Description>
+      <Input>
+        <Parameter name="error" type="Any" required="true">
+          <Description>待处理的错误对象。Exception 表示 L1 内部错误，dict 表示 L3 回流业务错误</Description>
+        </Parameter>
+        <Parameter name="channel" type="str" required="true">
+          <Description>目标渠道标识</Description>
+          <ValidValues>telegram, websocket, webhook</ValidValues>
+        </Parameter>
+        <Parameter name="metadata" type="dict" required="false">
+          <Description>渠道特定的元数据（如 chat_id、connection_id），用于格式化输出</Description>
+        </Parameter>
+      </Input>
+      <Output type="Any">
+        <Description>格式化后的错误响应，类型取决于渠道：</Description>
+        <ChannelFormat channel="telegram">dict（Bot API sendMessage 参数结构）</ChannelFormat>
+        <ChannelFormat channel="websocket">dict（JSON 对象）</ChannelFormat>
+        <ChannelFormat channel="webhook">tuple[int, dict]（HTTP 状态码, 响应体）</ChannelFormat>
+      </Output>
+    </SecondaryMethod>
+
+    <Method name="is_retryable">
+      <Signature>is_retryable(exception: Exception, retryable_types: tuple = (Exception,)) -&gt; bool</Signature>
+      <Description>判断给定异常是否属于可重试类型。内部辅助方法，也可由外部调用以预先判断</Description>
+      <Input>
+        <Parameter name="exception" type="Exception" required="true">
+          <Description>需要判断的异常实例</Description>
+        </Parameter>
+        <Parameter name="retryable_types" type="tuple" default="(Exception,)">
+          <Description>可重试的异常类型元组</Description>
+        </Parameter>
+      </Input>
+      <Output type="bool">
+        <Description>True 表示该异常属于可重试类型</Description>
+      </Output>
+    </Method>
+
+    <Method name="format_for_telegram">
+      <Signature>format_for_telegram(error_message: str, metadata: Optional[Dict] = None) -&gt; Dict[str, Any]</Signature>
+      <Description>将错误文本格式化为 Telegram Bot API 兼容的 sendMessage 参数</Description>
+    </Method>
+
+    <Method name="format_for_websocket">
+      <Signature>format_for_websocket(error_message: str, metadata: Optional[Dict] = None) -&gt; Dict[str, Any]</Signature>
+      <Description>将错误文本格式化为 WebSocket JSON 响应对象</Description>
+    </Method>
+
+    <Method name="format_for_webhook">
+      <Signature>format_for_webhook(error_message: str, metadata: Optional[Dict] = None) -&gt; tuple[int, Dict[str, Any]]</Signature>
+      <Description>将错误文本格式化为 HTTP Webhook 响应（状态码 + 响应体）</Description>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L1.UserInteraction">L1 主入口</Component>
+      <Relation>被调用方（receive_payload 中调用 execute_with_retry，send_response 可能调用 handle_error）</Relation>
+    </Upstream>
+
+    <Upstream type="business_error">
+      <Layer id="L2">控制网关层</Layer>
+      <Relation>接收 L3 业务错误的回流响应</Relation>
+      <DataFormat>dict（经 L3.ErrorTranslator 转译后的错误文本）</DataFormat>
+    </Upstream>
+
+    <Downstream>
+      <Layer id="External">外部系统</Layer>
+      <Relation>将格式化后的错误响应返回给用户</Relation>
+      <Protocol>HTTPS / WebSocket / HTTP</Protocol>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>logging - 用于记录重试与错误日志</Dependency>
+      </Internal>
+    </Dependencies>
+
+    <CouplingStrength>中耦合</CouplingStrength>
+    <CouplingType>数据耦合（与 L2 通过 dict 通信）+ 控制耦合（根据 channel 路由格式化逻辑）</CouplingType>
+
+    <Note>
+      L1.ErrorHandler 与 L3.ErrorTranslator 是上下游协作关系，非替代关系。
+      ErrorHandler 仅做协议级格式化，不做语义转译。
+    </Note>
+  </Coupling>
+
+</Component>

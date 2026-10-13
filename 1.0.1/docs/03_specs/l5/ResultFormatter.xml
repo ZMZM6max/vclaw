@@ -1,0 +1,558 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L5 Component: ResultFormatter
+  所属层: L5 - 能力抽象层 (Tools &amp; Capabilities)
+  创建时间: 2024
+  用途: 详细定义结果格式化器组件的架构、输出模板、空结果处理与样式规范
+-->
+<ComponentSpec id="L5-RESULT-FORMATTER" name="ResultFormatter" layer="L5" version="1.0">
+
+  <!-- ==================== 1. 基本信息 ==================== -->
+  <Overview>
+    <Description>结果格式化器，统一所有工具执行结果的输出格式。负责将原始执行结果（字符串、数字、列表等）转换为标准化的Observation对象，同时处理空结果、超长结果截断、以及面向用户的自然语言模板渲染。ResultFormatter是L5层与L3层之间的输出适配器。</Description>
+    <Role>L5层输出标准化引擎</Role>
+    <Responsibility>统一输出格式、空结果处理、结果截断、模板渲染、Mock标识过滤</Responsibility>
+  </Overview>
+
+  <!-- ==================== 2. 核心职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">统一输出格式（将任意执行结果转为标准Observation）</Item>
+    <Item priority="critical">空结果处理（禁止返回"模拟读取"等占位文本）</Item>
+    <Item priority="high">结果长度控制（截断至最大长度）</Item>
+    <Item priority="high">模板渲染（根据场景使用合适的用户提示语）</Item>
+    <Item priority="medium">Mock/模拟标识过滤（禁止泄漏到用户可见回复）</Item>
+    <Item priority="medium">枚举结果格式化（列表项附带确认问句）</Item>
+    <Item priority="low">元数据附加（执行时间、工具名、截断标记等）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 输出格式规范 ==================== -->
+  <OutputFormat>
+    <Structure name="Observation">
+      <Description>L5输出 / L3输入 - 工具执行结果标准格式</Description>
+      <Fields>
+        <Field name="status" type="str" required="true">
+          <Description>执行状态</Description>
+          <ValidValues>success, error</ValidValues>
+        </Field>
+        <Field name="result" type="str" required="true">
+          <Description>执行结果的字符串表示（用户可见内容）</Description>
+          <Constraints>最大长度10000字符，超出部分截断</Constraints>
+        </Field>
+        <Field name="execution_time" type="float" required="true">
+          <Description>实际执行耗时（秒）</Description>
+        </Field>
+        <Field name="metadata" type="dict" required="false" default="{}">
+          <Description>附加元数据（不直接展示给用户）</Description>
+          <Fields>
+            <Field name="tool_name" type="str">工具名称</Field>
+            <Field name="params" type="dict">实际使用的参数</Field>
+            <Field name="exit_code" type="int">退出码（代码执行工具）</Field>
+            <Field name="truncated" type="bool">结果是否被截断</Field>
+            <Field name="empty" type="bool">结果是否为空</Field>
+            <Field name="original_length" type="int">原始结果长度（截断时记录）</Field>
+          </Fields>
+        </Field>
+      </Fields>
+    </Structure>
+  </OutputFormat>
+
+  <!-- ==================== 4. 接口定义 ==================== -->
+  <Interface>
+    <Method name="format" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="raw_result" type="Any" required="true">
+            <Description>工具原始执行结果（字符串、列表、字典、数字等）</Description>
+          </Parameter>
+          <Parameter name="tool_name" type="str" required="true">
+            <Description>执行的工具名称</Description>
+          </Parameter>
+          <Parameter name="execution_time" type="float" required="true">
+            <Description>执行耗时（秒）</Description>
+          </Parameter>
+          <Parameter name="metadata" type="dict" required="false" default="{}">
+            <Description>附加元数据（exit_code、params等）</Description>
+          </Parameter>
+          <Parameter name="scenario" type="Optional[str]" required="false">
+            <Description>格式化场景（覆盖自动检测）</Description>
+            <ValidValues>empty_file_read, empty_search, empty_calculation, success_file_write, success_file_read, list_result, error, default</ValidValues>
+          </Parameter>
+        </Input>
+        <Output type="Observation">
+          <Description>标准化的Observation对象</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step order="1">检测raw_result类型和空状态</Step>
+        <Step order="2" condition="raw_result为空">应用空结果处理规则</Step>
+        <Step order="3" condition="raw_result为列表">应用枚举结果格式化</Step>
+        <Step order="4" condition="raw_result为错误">应用错误结果格式化</Step>
+        <Step order="5">应用场景模板渲染</Step>
+        <Step order="6">执行长度截断（若超过MaxResultLength）</Step>
+        <Step order="7">过滤Mock/模拟标识</Step>
+        <Step order="8">组装并返回Observation对象</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="format_success" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="result" type="str" required="true"/>
+          <Parameter name="tool_name" type="str" required="true"/>
+          <Parameter name="execution_time" type="float" required="true"/>
+          <Parameter name="metadata" type="dict" required="false" default="{}"/>
+        </Input>
+        <Output type="Observation"/>
+      </Signature>
+      <Description>格式化成功结果</Description>
+    </Method>
+
+    <Method name="format_error" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="error_message" type="str" required="true"/>
+          <Parameter name="tool_name" type="str" required="true"/>
+          <Parameter name="execution_time" type="float" required="true"/>
+          <Parameter name="error_type" type="Optional[str]" required="false"/>
+        </Input>
+        <Output type="Observation"/>
+      </Signature>
+      <Description>格式化错误结果</Description>
+      <Behavior>
+        <Step>1. 将error_message转换为用户友好的中文提示（若需要）</Step>
+        <Step>2. 保留原始错误信息在metadata中</Step>
+        <Step>3. 返回Observation(status="error", result=友好提示)</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="truncate" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="text" type="str" required="true"/>
+          <Parameter name="max_length" type="int" required="false" default="10000"/>
+        </Input>
+        <Output type="str">
+          <Description>截断后的文本</Description>
+        </Output>
+      </Signature>
+      <Description>截断超长结果</Description>
+      <Behavior>
+        <Step>1. 若text长度 &lt;= max_length，直接返回</Step>
+        <Step>2. 截取前max_length字符</Step>
+        <Step>3. 追加截断提示："\n...[内容已截断，共{original_length}字]"</Step>
+        <Step>4. 确保最终长度不超过max_length</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="detect_scenario" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="raw_result" type="Any" required="true"/>
+          <Parameter name="tool_name" type="str" required="true"/>
+          <Parameter name="metadata" type="dict" required="false" default="{}"/>
+        </Input>
+        <Output type="str">
+          <Description>检测到的场景标识符</Description>
+        </Output>
+      </Signature>
+      <Description>根据结果特征自动检测应用场景</Description>
+      <Rules>
+        <Rule condition="raw_result为空或空字符串" scenario="empty_{tool_name}">空结果场景</Rule>
+        <Rule condition="raw_result为列表" scenario="list_result">列表结果场景</Rule>
+        <Rule condition="tool_name == 'file_write' 且 metadata.get('bytes_written')" scenario="success_file_write">文件写入成功</Rule>
+        <Rule condition="tool_name == 'file_read'" scenario="success_file_read">文件读取成功</Rule>
+        <Rule condition="metadata.get('exit_code', 0) != 0" scenario="error">执行错误</Rule>
+        <Rule condition="default" scenario="default">默认场景</Rule>
+      </Rules>
+    </Method>
+
+    <Method name="_apply_template" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="scenario" type="str" required="true"/>
+          <Parameter name="raw_result" type="Any" required="true"/>
+          <Parameter name="tool_name" type="str" required="true"/>
+          <Parameter name="metadata" type="dict" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>渲染后的用户可见文本</Description>
+        </Output>
+      </Signature>
+      <Description>根据场景渲染输出模板。支持空结果、列表结果、文件读写成功、错误等场景的模板匹配。</Description>
+    </Method>
+
+    <Method name="_empty_template" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="scenario" type="str" required="true"/>
+          <Parameter name="tool_name" type="str" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>空结果提示文本</Description>
+        </Output>
+      </Signature>
+      <Description>返回空结果对应的模板文本。优先按场景精确匹配，其次按工具名回退，最后使用通用回退。</Description>
+    </Method>
+
+    <Method name="_list_template" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="raw_result" type="Any" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>格式化后的列表结果文本</Description>
+        </Output>
+      </Signature>
+      <Description>格式化列表结果。条目超过LIST_MAX_ITEMS（默认10）时显示前10条并提示"还有更多"，末尾附加"请确认是否需要打开？"</Description>
+    </Method>
+
+    <Method name="_truncate_result" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="text" type="str" required="true"/>
+          <Parameter name="metadata" type="dict" required="true"/>
+        </Input>
+        <Output type="tuple">
+          <Description>(截断后文本, 更新后的metadata)</Description>
+        </Output>
+      </Signature>
+      <Description>对结果文本执行截断并更新metadata。若超出MAX_RESULT_LENGTH，设置metadata.truncated=true和metadata.original_length。</Description>
+    </Method>
+
+    <Method name="_filter_mock" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="text" type="str" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>过滤后的文本</Description>
+        </Output>
+      </Signature>
+      <Description>过滤Mock/模拟标识。扫描结果文本是否包含"模拟"、"mock"、"placeholder"等字样，若发现则替换为"该文档为空"并记录警告日志。</Description>
+    </Method>
+
+    <Method name="_is_empty" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="raw_result" type="Any" required="true"/>
+        </Input>
+        <Output type="bool">
+          <Description>是否为空</Description>
+        </Output>
+      </Signature>
+      <Description>判断结果是否为空。处理None、空字符串、空列表、仅空白字符等情况。</Description>
+    </Method>
+
+    <Method name="_friendly_error_message" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="error_message" type="str" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>用户友好的中文错误提示</Description>
+        </Output>
+      </Signature>
+      <Description>将技术错误转换为用户友好的中文提示。支持FileNotFoundError、Permission Denied、Timeout、Memory等常见错误的语义转译。</Description>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 结果模板 ==================== -->
+  <ResultTemplates>
+    <Template scenario="empty_file_read">
+      <Description>空文件读取</Description>
+      <Output>该文档为空</Output>
+      <Rules>
+        <Rule>空字符串内容必须显式标记metadata.empty=true</Rule>
+        <Rule>禁止返回"模拟读取"、"mock data"、"placeholder"等占位文本</Rule>
+      </Rules>
+    </Template>
+
+    <Template scenario="empty_search">
+      <Description>空搜索结果</Description>
+      <Output>未找到相关内容</Output>
+      <Rules>
+        <Rule>必须返回此固定短语</Rule>
+        <Rule>禁止编造搜索结果</Rule>
+      </Rules>
+    </Template>
+
+    <Template scenario="empty_calculation">
+      <Description>空计算结果</Description>
+      <Output>计算结果为空</Output>
+    </Template>
+
+    <Template scenario="success_file_write">
+      <Description>文件写入成功</Description>
+      <Output>已成功写入《{filename}》，共{char_count}字</Output>
+      <Variables>
+        <Variable name="filename">文件名（不含路径）</Variable>
+        <Variable name="char_count">写入内容的字符数</Variable>
+      </Variables>
+    </Template>
+
+    <Template scenario="success_file_read">
+      <Description>文件读取成功</Description>
+      <Output>文件《{filename}》内容如下：\n{content}</Output>
+      <Variables>
+        <Variable name="filename">文件名</Variable>
+        <Variable name="content">文件内容（已截断）</Variable>
+      </Variables>
+    </Template>
+
+    <Template scenario="list_result">
+      <Description>枚举型结果（文件列表、搜索结果等）</Description>
+      <Output>找到以下{count}项：\n{items}\n请确认是否需要打开？</Output>
+      <Variables>
+        <Variable name="count">条目数量</Variable>
+        <Variable name="items">格式化的条目列表（每项占一行）</Variable>
+      </Variables>
+      <Rules>
+        <Rule>枚举型结果必须列出条目并附确认问句"请确认是否需要打开？"</Rule>
+        <Rule>条目超过10条时显示前10条并提示"还有更多"</Rule>
+      </Rules>
+    </Template>
+
+    <Template scenario="list_result_short">
+      <Description>简短列表结果</Description>
+      <Output>找到{count}个结果，需要查看具体内容吗？</Output>
+    </Template>
+
+    <Template scenario="error">
+      <Description>通用错误结果</Description>
+      <Output>{friendly_error_message}</Output>
+      <Note>错误消息由L3.ErrorTranslator进一步处理</Note>
+    </Template>
+  </ResultTemplates>
+
+  <!-- ==================== 6. 空结果处理规则 ==================== -->
+  <EmptyResultHandling>
+    <Rule id="ER-01" priority="critical">空字符串内容必须显式标记metadata.empty=true，禁止返回"模拟读取"等占位文本</Rule>
+    <Rule id="ER-02">空文件读取：向用户返回"该文档为空"</Rule>
+    <Rule id="ER-03">Mock/模拟标识不得泄漏到用户可见的回复中</Rule>
+    <Rule id="ER-04">空搜索结果：向用户返回"未找到相关内容"</Rule>
+    <Rule id="ER-05">空计算结果：向用户返回"计算结果为空"</Rule>
+    <Rule id="ER-06">空列表结果：返回"找到0个结果，需要查看具体内容吗？"</Rule>
+    <Rule id="ER-07">空结果使用口语化短句（3-8字），禁止返回技术术语或英文占位符</Rule>
+
+    <ForbiddenPhrases>
+      <Phrase>模拟读取</Phrase>
+      <Phrase>mock data</Phrase>
+      <Phrase>placeholder</Phrase>
+      <Phrase>暂无内容</Phrase>
+      <Phrase>null</Phrase>
+      <Phrase>undefined</Phrase>
+      <Phrase>empty</Phrase>
+    </ForbiddenPhrases>
+  </EmptyResultHandling>
+
+  <!-- ==================== 7. 输出样式规范 ==================== -->
+  <OutputStyles>
+    <Style name="enumeration" applies_to="list_result, directory_listing, search_results">
+      <Description>枚举型结果展示规范</Description>
+      <Rules>
+        <Rule>必须列出条目并附确认问句（"请确认是否需要打开？"）</Rule>
+        <Rule>条目超过10条时显示前10条并提示"还有更多"</Rule>
+        <Rule>每条格式："{index}. {item_name} ({item_detail})"</Rule>
+        <Rule>最后一条后追加换行和确认问句</Rule>
+      </Rules>
+      <Example>
+        <![CDATA[
+        找到以下3项：
+        1. report_2024.pdf (2.3MB)
+        2. summary.docx (156KB)
+        3. data.xlsx (890KB)
+        请确认是否需要打开？
+        ]]>
+      </Example>
+    </Style>
+
+    <Style name="empty" applies_to="empty_file_read, empty_search, empty_calculation">
+      <Description>空结果展示规范</Description>
+      <Rules>
+        <Rule>空结果使用口语化短句（3-8字）</Rule>
+        <Rule>禁止返回"模拟读取"等占位文本</Rule>
+        <Rule>禁止使用技术术语（null、undefined、empty）</Rule>
+      </Rules>
+    </Style>
+
+    <Style name="code" applies_to="python_repl, terminal">
+      <Description>代码执行结果展示规范</Description>
+      <Rules>
+        <Rule>stdout内容直接作为result</Rule>
+        <Rule>stderr内容放入metadata.stderr</Rule>
+        <Rule>exit_code非0时status为error</Rule>
+        <Rule>空stdout且exit_code为0时，标记empty=true</Rule>
+      </Rules>
+    </Style>
+  </OutputStyles>
+
+  <!-- ==================== 8. 截断规则 ==================== -->
+  <TruncationRules>
+    <MaxResultLength>10000字符</MaxResultLength>
+    <TruncationIndicator>\n...[内容已截断，共{original_length}字]</TruncationIndicator>
+    <TruncationBehavior>
+      <Step>1. 统计原始结果字符串长度</Step>
+      <Step>2. 若超过MaxResultLength，截取前(MaxResultLength - indicator_length)字符</Step>
+      <Step>3. 追加TruncationIndicator</Step>
+      <Step>4. 设置metadata.truncated=true和metadata.original_length</Step>
+    </TruncationBehavior>
+    <PerToolLimits>
+      <Tool name="file_read" max="10000"/>
+      <Tool name="search_web" max="5000"/>
+      <Tool name="python_repl" max="10000"/>
+      <Tool name="terminal" max="10000"/>
+    </PerToolLimits>
+  </TruncationRules>
+
+  <!-- ==================== 9. Mock标识过滤 ==================== -->
+  <MockFilter>
+    <Description>过滤结果中的Mock/模拟标识，防止泄漏到用户可见内容</Description>
+    <Patterns>
+      <Pattern>模拟</Pattern>
+      <Pattern>mock</Pattern>
+      <Pattern>placeholder</Pattern>
+      <Pattern>dummy</Pattern>
+      <Pattern>test data</Pattern>
+      <Pattern>示例数据</Pattern>
+    </Patterns>
+    <Action>
+      <Step>1. 扫描result字符串是否包含Patterns</Step>
+      <Step>2. 若发现，替换为空结果模板（如"该文档为空"）</Step>
+      <Step>3. 记录警告日志</Step>
+    </Action>
+  </MockFilter>
+
+  <!-- ==================== 10. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">ToolExecutor执行工具，获得raw_result</Step>
+    <Step order="2">ToolExecutor调用ResultFormatter.format(raw_result, tool_name, execution_time, metadata)</Step>
+    <Step order="3">ResultFormatter检测场景（空结果、列表、错误等）</Step>
+    <Step order="4">ResultFormatter应用对应模板</Step>
+    <Step order="5">ResultFormatter执行长度截断（若需要）</Step>
+    <Step order="6">ResultFormatter过滤Mock标识</Step>
+    <Step order="7">ResultFormatter组装Observation对象</Step>
+    <Step order="8">返回Observation给ToolExecutor</Step>
+    <Step order="9">ToolExecutor返回Observation给L3</Step>
+  </DataFlow>
+
+  <!-- ==================== 11. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Consumer component="L5.ToolExecutor">
+        <Usage>格式化执行结果</Usage>
+        <Interface>ResultFormatter.format(raw_result, tool_name, execution_time, metadata)</Interface>
+      </Consumer>
+    </Upstream>
+
+    <Downstream>
+      <Dependency component="L3.ErrorTranslator">
+        <Usage>错误结果最终由L3.ErrorTranslator转译为用户友好提示</Usage>
+        <Note>ResultFormatter.format_error提供初步格式化，L3.ErrorTranslator负责语义转译</Note>
+      </Dependency>
+    </Downstream>
+  </Coupling>
+
+  <!-- ==================== 12. 配置项 ==================== -->
+  <Configuration>
+    <Config name="MAX_RESULT_LENGTH" type="int" default="10000">
+      <Description>结果最大长度（字符数）</Description>
+    </Config>
+    <Config name="TRUNCATION_INDICATOR" type="str" default="\n...[内容已截断，共{original_length}字]">
+      <Description>截断提示文本模板</Description>
+    </Config>
+    <Config name="LIST_MAX_ITEMS" type="int" default="10">
+      <Description>列表结果最大显示条目数</Description>
+    </Config>
+    <Config name="EMPTY_RESULT_TEMPLATES" type="dict">
+      <Description>空结果模板配置</Description>
+      <Defaults>
+        <Default tool="file_read">该文档为空</Default>
+        <Default tool="search_web">未找到相关内容</Default>
+        <Default tool="calculator">计算结果为空</Default>
+        <Default tool="file_search">未找到相关文件</Default>
+      </Defaults>
+    </Config>
+    <Config name="MOCK_FILTER_ENABLED" type="bool" default="true">
+      <Description>是否启用Mock标识过滤</Description>
+    </Config>
+  </Configuration>
+
+  <!-- ==================== 13. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="RF-001">
+      <Name>文件读取成功格式化</Name>
+      <Input>
+        <RawResult>Hello World</RawResult>
+        <ToolName>file_read</ToolName>
+        <Metadata>{"filename": "test.txt"}</Metadata>
+      </Input>
+      <Expected>Observation.status="success", result包含"文件《test.txt》内容如下：\nHello World"</Expected>
+    </TestCase>
+
+    <TestCase id="RF-002">
+      <Name>空文件读取</Name>
+      <Input>
+        <RawResult>""</RawResult>
+        <ToolName>file_read</ToolName>
+      </Input>
+      <Expected>Observation.status="success", result="该文档为空", metadata.empty=true</Expected>
+    </TestCase>
+
+    <TestCase id="RF-003">
+      <Name>结果截断</Name>
+      <Input>
+        <RawResult>超长字符串（20000字符）</RawResult>
+        <ToolName>file_read</ToolName>
+      </Input>
+      <Expected>Observation.result长度不超过10000，包含截断提示，metadata.truncated=true</Expected>
+    </TestCase>
+
+    <TestCase id="RF-004">
+      <Name>列表结果格式化</Name>
+      <Input>
+        <RawResult>["file1.txt", "file2.txt", "file3.txt"]</RawResult>
+        <ToolName>file_search</ToolName>
+      </Input>
+      <Expected>result包含编号列表和"请确认是否需要打开？"</Expected>
+    </TestCase>
+
+    <TestCase id="RF-005">
+      <Name>Mock标识过滤</Name>
+      <Input>
+        <RawResult>这是mock data内容</RawResult>
+        <ToolName>file_read</ToolName>
+      </Input>
+      <Expected>result为"该文档为空"或过滤后的内容，不含"mock"</Expected>
+    </TestCase>
+
+    <TestCase id="RF-006">
+      <Name>错误结果格式化</Name>
+      <Input>
+        <RawResult>FileNotFoundError: No such file</RawResult>
+        <ToolName>file_read</ToolName>
+        <Metadata>{"exit_code": 1}</Metadata>
+      </Input>
+      <Expected>Observation.status="error", result包含错误描述</Expected>
+    </TestCase>
+
+    <TestCase id="RF-007">
+      <Name>文件写入成功模板</Name>
+      <Input>
+        <RawResult>None</RawResult>
+        <ToolName>file_write</ToolName>
+        <Metadata>{"bytes_written": 1024, "filename": "output.txt"}</Metadata>
+      </Input>
+      <Expected>result="已成功写入《output.txt》，共1024字"</Expected>
+    </TestCase>
+  </Testing>
+
+  <!-- ==================== 14. 实现提示 ==================== -->
+  <ImplementationNotes>
+    <Note>模板渲染建议使用Python标准库string.Template或Jinja2（若项目已引入）</Note>
+    <Note>空结果检测应同时处理None、空字符串、空列表、仅空白字符等情况</Note>
+    <Note>截断时注意中文字符与英文字符长度统一按字符数计算（非字节数）</Note>
+    <Note>Mock过滤应大小写不敏感，且支持部分匹配</Note>
+    <Note>metadata中的信息不展示给用户，但传递给L3用于后续处理（如ErrorTranslator）</Note>
+  </ImplementationNotes>
+
+</ComponentSpec>

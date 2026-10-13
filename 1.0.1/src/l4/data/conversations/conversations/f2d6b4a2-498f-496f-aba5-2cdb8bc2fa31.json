@@ -1,0 +1,23 @@
+{
+  "session_id": "f2d6b4a2-498f-496f-aba5-2cdb8bc2fa31",
+  "messages": [
+    {
+      "role": "user",
+      "content": "/new"
+    },
+    {
+      "role": "assistant",
+      "content": "\"Your request '/new' is unclear. Could you please specify what you would like to create or initiate? For example, are you looking to create a new file, start a new project, or something else?\""
+    },
+    {
+      "role": "user",
+      "content": "我第一个问题问的什么"
+    },
+    {
+      "role": "assistant",
+      "content": "\"Your first question was '/new'.\""
+    }
+  ],
+  "updated_at": 1777371408.797271,
+  "message_count": 4
+}

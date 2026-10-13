@@ -1,0 +1,376 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L6 Component: SecurityEnforcer
+  所属层级: L6 RuntimeEnvironment
+  创建时间: 2026-04-23
+  用途: 详细定义安全执行器的策略、禁止模式、校验逻辑与测试规范
+-->
+<Component id="L6.SecurityEnforcer" name="SecurityEnforcer" version="1.0">
+
+  <!-- ==================== 1. 概述 ==================== -->
+  <Overview>
+    <Purpose>安全执行器是L6层的第一道防线，负责在执行前对代码和配置进行静态安全分析，拦截包含危险模式或超出资源限制的请求。</Purpose>
+    <Role>静态安全分析师 + 资源边界守卫，所有执行请求必须经过它的校验。</Role>
+    <LayerPosition>L6入口层，被RuntimeEnvironment在run_code()和run_command()的最开始调用</LayerPosition>
+  </Overview>
+
+  <!-- ==================== 2. 职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">语言白名单校验：只允许python、javascript、bash三种语言</Item>
+    <Item priority="critical">危险模式检测：通过正则表达式匹配禁止的系统调用和代码执行模式</Item>
+    <Item priority="critical">代码大小限制：防止超大代码导致解析或传输问题（最大100KB）</Item>
+    <Item priority="high">资源边界校验：确保请求的timeout、memory、cpu不超过系统硬上限</Item>
+    <Item priority="medium">正则预编译：在__init__时编译所有禁止模式，提升匹配性能</Item>
+    <Item priority="low">可扩展性：支持动态添加新的禁止模式（未来需求）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 安全策略 ==================== -->
+  <SecurityPolicies>
+    <Policy id="POL_001">
+      <Name>禁止系统命令执行</Name>
+      <Description>禁止调用操作系统命令接口</Description>
+      <ForbiddenPatterns>
+        <Pattern>os\.system</Pattern>
+        <Pattern>os\.popen</Pattern>
+        <Pattern>subprocess</Pattern>
+      </ForbiddenPatterns>
+      <Rationale>防止代码通过Python调用宿主系统命令，绕过Docker隔离</Rationale>
+    </Policy>
+    <Policy id="POL_002">
+      <Name>禁止动态代码执行</Name>
+      <Description>禁止执行字符串形式的代码</Description>
+      <ForbiddenPatterns>
+        <Pattern>eval\s*\(</Pattern>
+        <Pattern>exec\s*\(</Pattern>
+        <Pattern>compile\s*\(</Pattern>
+      </ForbiddenPatterns>
+      <Rationale>eval/exec可构造任意代码执行，是常见的Python沙盒逃逸手段</Rationale>
+    </Policy>
+    <Policy id="POL_003">
+      <Name>禁止动态导入</Name>
+      <Description>禁止运行时动态加载模块</Description>
+      <ForbiddenPatterns>
+        <Pattern>__import__</Pattern>
+      </ForbiddenPatterns>
+      <Rationale>__import__可用于在运行时加载被禁止的模块（如os、subprocess）</Rationale>
+    </Policy>
+    <Policy id="POL_004">
+      <Name>禁止危险文件操作</Name>
+      <Description>禁止直接删除文件系统对象</Description>
+      <ForbiddenPatterns>
+        <Pattern>os\.unlink</Pattern>
+        <Pattern>os\.rmdir</Pattern>
+        <Pattern>shutil\.rmtree</Pattern>
+      </ForbiddenPatterns>
+      <Rationale>虽然Docker容器有只读根文件系统，但防止对挂载的临时目录进行破坏性操作</Rationale>
+    </Policy>
+    <Policy id="POL_005">
+      <Name>代码大小限制</Name>
+      <Description>单个代码文件不得超过100KB</Description>
+      <MaxCodeSize>102400 bytes (100 * 1024)</MaxCodeSize>
+      <Rationale>超大代码可能用于拒绝服务攻击（解析器/编译器消耗大量资源）</Rationale>
+    </Policy>
+    <Policy id="POL_006">
+      <Name>资源硬上限</Name>
+      <Description>无论用户请求什么，资源限制都不能超过系统硬上限</Description>
+      <HardLimits>
+        <Limit type="timeout">300 seconds</Limit>
+        <Limit type="memory">4096 MB</Limit>
+        <Limit type="cpu">4 cores</Limit>
+      </HardLimits>
+      <Rationale>保护宿主机不被单个请求耗尽资源</Rationale>
+    </Policy>
+  </SecurityPolicies>
+
+  <!-- ==================== 4. 接口规范 ==================== -->
+  <Interface>
+    <Method name="__init__">
+      <Signature>
+        <Input>无</Input>
+        <Output type="SecurityEnforcer">SecurityEnforcer实例</Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 将FORBIDDEN_PATTERNS列表中的每个正则表达式编译为Pattern对象</Step>
+        <Step>2. 存入self._compiled_patterns列表</Step>
+      </Behavior>
+      <PerformanceNote>正则预编译避免每次check_code时重新编译，提升吞吐量</PerformanceNote>
+    </Method>
+
+    <Method name="validate_language">
+      <Signature>
+        <Input>
+          <Parameter name="language" type="str" required="true">
+            <Description>编程语言</Description>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>
+        <Step>1. 将language转换为小写并去除首尾空格</Step>
+        <Step>2. 检查是否在SUPPORTED_LANGUAGES集合中</Step>
+        <Step>3. 若不支持，抛出UnsupportedLanguageError，错误消息包含支持的语言列表</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="UnsupportedLanguageError">语言不在支持列表中</Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="check_code">
+      <Signature>
+        <Input>
+          <Parameter name="code" type="str" required="true">
+            <Description>代码字符串</Description>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>
+        <Step>1. 检查code长度是否超过MAX_CODE_SIZE（100KB）</Step>
+        <Step>2. 若超过，抛出SecurityViolationError</Step>
+        <Step>3. 遍历self._compiled_patterns</Step>
+        <Step>4. 对每个pattern，在code中搜索匹配</Step>
+        <Step>5. 若匹配成功，抛出SecurityViolationError，消息包含匹配到的文本</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="SecurityViolationError">代码包含禁止模式或超过大小限制</Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="check_resource_limits">
+      <Signature>
+        <Input>
+          <Parameter name="timeout" type="int" required="true">
+            <Description>请求的超时时间（秒）</Description>
+          </Parameter>
+          <Parameter name="memory_limit" type="int" required="true">
+            <Description>请求的内存限制（MB）</Description>
+          </Parameter>
+          <Parameter name="cpu_limit" type="float" required="true">
+            <Description>请求的CPU限制（核数）</Description>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Behavior>
+        <Step>1. 检查timeout &gt; 300，是则抛出SecurityViolationError</Step>
+        <Step>2. 检查memory_limit &gt; 4096，是则抛出SecurityViolationError</Step>
+        <Step>3. 检查cpu_limit &gt; 4，是则抛出SecurityViolationError</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="SecurityViolationError">任一资源限制超过硬上限</Exception>
+      </Exceptions>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 禁止模式列表 ==================== -->
+  <ForbiddenPatterns>
+    <Pattern regex="os\.system" category="system_command" severity="critical">
+      <Description>调用操作系统命令</Description>
+      <Example>os.system('rm -rf /')</Example>
+    </Pattern>
+    <Pattern regex="subprocess" category="system_command" severity="critical">
+      <Description>创建子进程</Description>
+      <Example>subprocess.run(['ls', '-la'])</Example>
+    </Pattern>
+    <Pattern regex="os\.popen" category="system_command" severity="critical">
+      <Description>通过管道执行命令</Description>
+      <Example>os.popen('whoami').read()</Example>
+    </Pattern>
+    <Pattern regex="eval\s*\(" category="dynamic_execution" severity="critical">
+      <Description>执行字符串为Python表达式</Description>
+      <Example>eval("__import__('os').system('id')")</Example>
+    </Pattern>
+    <Pattern regex="exec\s*\(" category="dynamic_execution" severity="critical">
+      <Description>执行字符串为Python语句</Description>
+      <Example>exec("import os; os.system('id')")</Example>
+    </Pattern>
+    <Pattern regex="compile\s*\(" category="dynamic_execution" severity="high">
+      <Description>编译字符串为代码对象</Description>
+      <Example>compile('malicious_code', '&lt;string&gt;', 'exec')</Example>
+    </Pattern>
+    <Pattern regex="__import__" category="dynamic_import" severity="critical">
+      <Description>动态导入模块</Description>
+      <Example>__import__('os').system('id')</Example>
+    </Pattern>
+    <Pattern regex="os\.unlink" category="filesystem" severity="medium">
+      <Description>删除文件</Description>
+      <Example>os.unlink('/sandbox/important.txt')</Example>
+    </Pattern>
+    <Pattern regex="os\.rmdir" category="filesystem" severity="medium">
+      <Description>删除目录</Description>
+      <Example>os.rmdir('/sandbox/data')</Example>
+    </Pattern>
+    <Pattern regex="shutil\.rmtree" category="filesystem" severity="medium">
+      <Description>递归删除目录树</Description>
+      <Example>shutil.rmtree('/sandbox')</Example>
+    </Pattern>
+  </ForbiddenPatterns>
+
+  <!-- ==================== 6. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">RuntimeEnvironment.run_code() 接收(language, code, timeout, environment_config)</Step>
+    <Step order="2">调用 SecurityEnforcer.validate_language(language)</Step>
+    <Step order="3">语言校验失败 → 抛出UnsupportedLanguageError，终止执行</Step>
+    <Step order="4">调用 SecurityEnforcer.check_code(code)</Step>
+    <Step order="5">代码校验失败 → 抛出SecurityViolationError，终止执行</Step>
+    <Step order="6">调用 SecurityEnforcer.check_resource_limits(timeout, memory_limit, cpu_limit)</Step>
+    <Step order="7">资源校验失败 → 抛出SecurityViolationError，终止执行</Step>
+    <Step order="8">全部通过 → 继续执行SandboxManager.create()</Step>
+  </DataFlow>
+
+  <!-- ==================== 7. 配置项 ==================== -->
+  <Configuration>
+    <ConfigItem name="SUPPORTED_LANGUAGES">
+      <Description>支持的语言集合</Description>
+      <Value>{"python", "javascript", "bash"}</Value>
+      <ReadOnly>true</ReadOnly>
+    </ConfigItem>
+    <ConfigItem name="MAX_CODE_SIZE">
+      <Description>代码大小上限（字节）</Description>
+      <Value>102400</Value>
+      <Unit>bytes</Unit>
+    </ConfigItem>
+    <ConfigItem name="FORBIDDEN_PATTERNS">
+      <Description>禁止的正则表达式模式列表</Description>
+      <Value>见上方ForbiddenPatterns节</Value>
+      <Note>修改后需重新实例化SecurityEnforcer才能使新配置生效</Note>
+    </ConfigItem>
+  </Configuration>
+
+  <!-- ==================== 8. 异常与错误处理 ==================== -->
+  <ErrorHandling>
+    <Scenario name="unsupported_language">
+      <Trigger>传入"ruby", "go", "cpp"等不支持的语言</Trigger>
+      <Action>validate_language抛出UnsupportedLanguageError</Action>
+      <ErrorMessage>Language '{language}' is not supported. Supported languages: python, javascript, bash</ErrorMessage>
+    </Scenario>
+    <Scenario name="code_too_large">
+      <Trigger>代码字符串长度 &gt; 102400</Trigger>
+      <Action>check_code抛出SecurityViolationError</Action>
+      <ErrorMessage>Code size ({len(code)} bytes) exceeds maximum allowed (102400 bytes)</ErrorMessage>
+    </Scenario>
+    <Scenario name="forbidden_pattern_detected">
+      <Trigger>代码中包含任何FORBIDDEN_PATTERNS匹配项</Trigger>
+      <Action>check_code抛出SecurityViolationError</Action>
+      <ErrorMessage>Security violation: Forbidden pattern detected - '{match.group()}'</ErrorMessage>
+    </Scenario>
+    <Scenario name="timeout_too_large">
+      <Trigger>timeout &gt; 300</Trigger>
+      <Action>check_resource_limits抛出SecurityViolationError</Action>
+      <ErrorMessage>Timeout {timeout}s exceeds maximum allowed (300s)</ErrorMessage>
+    </Scenario>
+    <Scenario name="memory_too_large">
+      <Trigger>memory_limit &gt; 4096</Trigger>
+      <Action>check_resource_limits抛出SecurityViolationError</Action>
+      <ErrorMessage>Memory limit {memory_limit}MB exceeds maximum allowed (4096MB)</ErrorMessage>
+    </Scenario>
+    <Scenario name="cpu_too_large">
+      <Trigger>cpu_limit &gt; 4</Trigger>
+      <Action>check_resource_limits抛出SecurityViolationError</Action>
+      <ErrorMessage>CPU limit {cpu_limit} exceeds maximum allowed (4 cores)</ErrorMessage>
+    </Scenario>
+  </ErrorHandling>
+
+  <!-- ==================== 9. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component>RuntimeEnvironment</Component>
+      <Relation>RuntimeEnvironment在run_code()和run_command()的入口处调用SecurityEnforcer的三个校验方法</Relation>
+    </Upstream>
+    <Downstream>
+      <Component>无</Component>
+      <Description>SecurityEnforcer是纯分析组件，不调用其他业务组件，仅依赖Python标准库re模块</Description>
+    </Downstream>
+    <Dependencies>
+      <External>re (Python标准库，正则表达式)</External>
+      <Internal>core.exceptions.UnsupportedLanguageError</Internal>
+      <Internal>core.exceptions.SecurityViolationError</Internal>
+    </Dependencies>
+  </Coupling>
+
+  <!-- ==================== 10. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="SE_001">
+      <Name>支持的语言通过校验</Name>
+      <Steps>
+        <Step>validate_language("python")</Step>
+        <Step>validate_language("javascript")</Step>
+        <Step>validate_language("bash")</Step>
+      </Steps>
+      <Expected>不抛出异常</Expected>
+    </TestCase>
+    <TestCase id="SE_002">
+      <Name>不支持的语言被拒绝</Name>
+      <Steps>
+        <Step>validate_language("ruby")</Step>
+      </Steps>
+      <Expected>抛出UnsupportedLanguageError</Expected>
+    </TestCase>
+    <TestCase id="SE_003">
+      <Name>大小写不敏感的语言校验</Name>
+      <Steps>
+        <Step>validate_language("PYTHON")</Step>
+        <Step>validate_language("  python  ")</Step>
+      </Steps>
+      <Expected>两者均通过（内部转小写并strip）</Expected>
+    </TestCase>
+    <TestCase id="SE_004">
+      <Name>安全代码通过校验</Name>
+      <Steps>
+        <Step>check_code("print('hello')")</Step>
+        <Step>check_code("x = 1 + 2")</Step>
+      </Steps>
+      <Expected>不抛出异常</Expected>
+    </TestCase>
+    <TestCase id="SE_005">
+      <Name>检测到os.system</Name>
+      <Steps>
+        <Step>check_code("import os; os.system('ls')")</Step>
+      </Steps>
+      <Expected>抛出SecurityViolationError，消息包含"os.system"</Expected>
+    </TestCase>
+    <TestCase id="SE_006">
+      <Name>检测到eval</Name>
+      <Steps>
+        <Step>check_code("eval('1+1')")</Step>
+      </Steps>
+      <Expected>抛出SecurityViolationError，消息包含"eval"</Expected>
+    </TestCase>
+    <TestCase id="SE_007">
+      <Name>代码大小超限</Name>
+      <Steps>
+        <Step>check_code("x" * 102401)</Step>
+      </Steps>
+      <Expected>抛出SecurityViolationError</Expected>
+    </TestCase>
+    <TestCase id="SE_008">
+      <Name>资源限制正常范围</Name>
+      <Steps>
+        <Step>check_resource_limits(timeout=30, memory_limit=512, cpu_limit=1.0)</Step>
+      </Steps>
+      <Expected>不抛出异常</Expected>
+    </TestCase>
+    <TestCase id="SE_009">
+      <Name>超时超限</Name>
+      <Steps>
+        <Step>check_resource_limits(timeout=301, memory_limit=512, cpu_limit=1.0)</Step>
+      </Steps>
+      <Expected>抛出SecurityViolationError</Expected>
+    </TestCase>
+    <TestCase id="SE_010">
+      <Name>内存超限</Name>
+      <Steps>
+        <Step>check_resource_limits(timeout=30, memory_limit=4097, cpu_limit=1.0)</Step>
+      </Steps>
+      <Expected>抛出SecurityViolationError</Expected>
+    </TestCase>
+    <TestCase id="SE_011">
+      <Name>CPU超限</Name>
+      <Steps>
+        <Step>check_resource_limits(timeout=30, memory_limit=512, cpu_limit=4.1)</Step>
+      </Steps>
+      <Expected>抛出SecurityViolationError</Expected>
+    </TestCase>
+  </Testing>
+
+</Component>

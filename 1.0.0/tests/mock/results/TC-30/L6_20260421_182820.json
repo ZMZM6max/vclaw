@@ -1,0 +1,66 @@
+{
+  "layer_name": "L6",
+  "timestamp": "2026-04-21T18:28:12.599702",
+  "execution_time": 7.6478800773620605,
+  "input_data": {
+    "language": "python",
+    "code": "import os, zipfile, json\n\n# Simulated sandbox path mapping for desktop item named '数据'\nsource_name = '数据'\nnew_name = '今日数据'\nsource_path = os.path.join('documents', 'desktop', source_name)\nrenamed_path = os.path.join('documents', 'desktop', new_name)\nzip_output = os.path.join('documents', 'desktop', '今日数据.zip')\n\n# This code is intentionally declarative for downstream execution simulation.\nprint(json.dumps({\n    'rename': {'old_path': source_path, 'new_path': renamed_path},\n    'zip': {'source_path': renamed_path, 'output_path': zip_output},\n    'send': {'recipient': '飞书助手', 'content': '已打包文件', 'attachment_path': zip_output}\n}, ensure_ascii=False))",
+    "timeout": 30
+  },
+  "output_data": {
+    "status": "error",
+    "error_code": "SECURITY_VIOLATION",
+    "error_message": "检测到危险操作: 尝试使用禁止导入模块 os",
+    "processing_log": [
+      "[1] 输入验证: 语言python, 代码长度724字符, timeout=30",
+      "[2] SecurityEnforcer: 安全检查失败 - 发现禁止导入 os",
+      "[3] SandboxManager: 未创建环境（因安全检查失败）",
+      "[4] ResourceLimiter: 未设置资源限制（因安全检查失败）",
+      "[5] CodeExecutor: 未执行代码（因安全检查失败）",
+      "[6] ExecutionLogger: 已记录安全拒绝事件"
+    ],
+    "component_trace": [
+      {
+        "component": "SecurityEnforcer",
+        "status": "error",
+        "reason": "代码包含禁止导入模块 os，触发安全拦截",
+        "output_summary": "blocked import: os"
+      },
+      {
+        "component": "SandboxManager",
+        "status": "skipped",
+        "reason": "安全检查未通过，未创建沙盒环境"
+      },
+      {
+        "component": "ResourceLimiter",
+        "status": "skipped",
+        "reason": "安全检查未通过，未设置资源限制"
+      },
+      {
+        "component": "CodeExecutor",
+        "status": "skipped",
+        "reason": "安全检查未通过，未进入代码执行阶段"
+      },
+      {
+        "component": "DockerController",
+        "status": "skipped",
+        "reason": "未使用Docker模式，且执行流程在安全检查阶段已终止"
+      },
+      {
+        "component": "ExecutionLogger",
+        "status": "success",
+        "reason": "已记录本次安全拒绝与处理结果",
+        "output_summary": "security violation logged"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 输入验证: 语言python, 代码长度724字符, timeout=30",
+    "[2] SecurityEnforcer: 安全检查失败 - 发现禁止导入 os",
+    "[3] SandboxManager: 未创建环境（因安全检查失败）",
+    "[4] ResourceLimiter: 未设置资源限制（因安全检查失败）",
+    "[5] CodeExecutor: 未执行代码（因安全检查失败）",
+    "[6] ExecutionLogger: 已记录安全拒绝事件"
+  ],
+  "error": null
+}

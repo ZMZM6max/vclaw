@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-05",
+  "test_name": "意图过于宽泛",
+  "category": "模糊指令",
+  "priority": "P2",
+  "user_input": "帮我整理一下电脑",
+  "precondition": "桌面和下载文件夹杂乱",
+  "react_flow": "Thought: 意图合法但范围过大 -> Action: 触发交互策略，向用户提供几个整理建议",
+  "expected_result": "系统: 分析当前沙盒文件分布。结果: 回复'没问题！我们可以按文件类型分类，或者把旧文件打包，您想怎么整理呢？'",
+  "risk_level": "中 - 未经确认直接乱移动文件导致用户找不到",
+  "test_type": "UX",
+  "tags": [
+    "手工"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "帮我整理一下电脑"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:16:23.342264"
+}

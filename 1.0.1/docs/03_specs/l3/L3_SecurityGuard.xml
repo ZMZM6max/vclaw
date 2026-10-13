@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Component: SecurityGuard
+  Layer: L3 (Orchestration)
+  创建时间: 2026-04-27
+  用途: 定义L3安全判断组件的详细规范
+  状态: 基于现有骨架补全，需实现LLM分类逻辑
+-->
+<Component name="SecurityGuard" layer="L3" version="1.0">
+
+  <Description>
+    L3入口强制守卫组件，对所有用户请求进行安全分类。
+    必须在ReActEngine、TaskPlanner、LLMManager、ToolCaller之前执行。
+    任何请求必须先通过SecurityGuard分类后才能进入后续组件。
+  </Description>
+
+  <Responsibilities>
+    <Item priority="critical">识别恶意请求（格式化磁盘、删除系统文件、黑客攻击、创建恶意软件等）</Item>
+    <Item priority="critical">对请求进行四级安全分类：normal、sensitive、malicious、high-risk</Item>
+    <Item priority="high">对malicious请求直接拒绝并返回固定拒绝话术（非LLM自由生成）</Item>
+    <Item priority="high">对high-risk请求标记为需二次确认，禁止直接拒绝，路由到ConfirmationManager</Item>
+    <Item priority="medium">对sensitive请求标记为需记录日志，但允许正常流转</Item>
+    <Item priority="medium">对normal请求直接放行</Item>
+  </Responsibilities>
+
+  <GuardRelationship>
+    <Precedes>ReActEngine</Precedes>
+    <Precedes>TaskPlanner</Precedes>
+    <Precedes>LLMManager</Precedes>
+    <Precedes>ToolCaller</Precedes>
+    <Note>SecurityGuard是L3数据流的强制前置节点，任何请求必须先通过SecurityGuard分类后才能进入后续组件</Note>
+  </GuardRelationship>
+
+  <Classification>
+    <Class name="normal">
+      <Description>普通用户请求，无需特殊处理</Description>
+      <Examples>文件读取、信息查询、建议类请求、数学计算</Examples>
+      <Route>直接通过，进入ReAct循环</Route>
+    </Class>
+    <Class name="sensitive">
+      <Description>涉及隐私或敏感操作，需记录日志但允许执行</Description>
+      <Examples>查询薪资文件、访问加密文档</Examples>
+      <Route>记录日志，允许进入ReAct循环</Route>
+    </Class>
+    <Class name="malicious">
+      <Description>明确有害的系统操作请求，必须拒绝</Description>
+      <Examples>格式化磁盘、删除系统文件、创建病毒、黑客攻击</Examples>
+      <Route>直接拒绝，返回固定拒绝话术</Route>
+    </Class>
+    <Class name="high-risk">
+      <Description>可能造成数据损失的用户操作，需二次确认（由ConfirmationManager处理），禁止直接拒绝</Description>
+      <Examples>删除用户文件、清空文件夹、覆盖已有文件</Examples>
+      <Route>标记为需二次确认，由L5.ConfirmationManager处理</Route>
+      <Rule>禁止由SecurityGuard直接拒绝high-risk请求——用户主动发起的合法高危操作必须走确认流程</Rule>
+    </Class>
+  </Classification>
+
+  <RiskLevelMatrix>
+    <Level name="low">
+      <Actions>read-only, advice, query</Actions>
+      <Trigger>文件读取、信息查询、建议类请求、计算器使用</Trigger>
+      <Route>直接通过，不触发二次确认</Route>
+      <Rule>低风险操作禁止被升级为高危。如"整理桌面建议"必须判定为low，不得触发确认</Rule>
+    </Level>
+    <Level name="medium">
+      <Actions>write-new</Actions>
+      <Trigger>向新路径写入文件（目标路径不存在）</Trigger>
+      <Route>允许执行，记录日志</Route>
+    </Level>
+    <Level name="high">
+      <Actions>overwrite, delete, batch-clean</Actions>
+      <Trigger>覆盖已有文件、删除文件、批量清理、清空文件夹</Trigger>
+      <Route>路由到ConfirmationManager进行二次确认</Route>
+      <Rule>写入冲突（文件已存在）必须判定为high，不得直接成功</Rule>
+    </Level>
+    <Level name="critical">
+      <Actions>system-attack, malicious-code</Actions>
+      <Trigger>格式化磁盘、删除系统文件、黑客攻击、创建恶意软件</Trigger>
+      <Route>直接拒绝，返回固定拒绝模板</Route>
+    </Level>
+  </RiskLevelMatrix>
+
+  <CannedResponses>
+    <Response scenario="malicious_system_attack">
+      <Text>这种操作太危险了，可能会毁掉您的电脑数据，我绝对不能这么做！</Text>
+      <Usage>格式化磁盘、删除系统文件、创建病毒等恶意请求</Usage>
+    </Response>
+    <Response scenario="wechat_forward">
+      <Text>抱歉，我无法代您发送微信消息或冒充您联系他人。如果您需要发送消息，请直接使用微信应用操作。</Text>
+      <Usage>用户要求代发微信消息、冒充身份联系他人</Usage>
+    </Response>
+    <Response scenario="sensitive_content">
+      <Text>抱歉，我不支持搜索此类内容哦，换个话题吧？</Text>
+      <Usage>搜索违禁品、敏感内容等</Usage>
+    </Response>
+    <Response scenario="permission_denied">
+      <Text>抱歉，您没有权限执行此操作。如需授权，请联系管理员。</Text>
+      <Usage>权限不足场景</Usage>
+    </Response>
+    <Rule>拒绝话术必须使用固定模板，禁止由LLM自由生成，确保拒答一致性</Rule>
+  </CannedResponses>
+
+  <Methods>
+    <Method name="classify">
+      <Signature>
+        <Input>
+          <Parameter name="request" type="str" required="true">
+            <Description>用户请求文本</Description>
+          </Parameter>
+        </Input>
+        <Output type="str">
+          <Description>安全分类：normal / sensitive / malicious / high-risk</Description>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Approach>基于LLM的安全分类（必须使用真实LLM，依赖语义理解）</Approach>
+        <PromptTemplate>
+          <![CDATA[
+You are a security classifier for an AI assistant. Classify the following user request into one of four categories:
+
+Categories:
+- normal: Regular user requests (file read, query, calculation, advice)
+- sensitive: Involves privacy or sensitive data (salary files, encrypted docs)
+- malicious: Clearly harmful system operations (format disk, delete system files, create malware, hacking)
+- high-risk: User-initiated operations that may cause data loss (delete files, clear folders, overwrite existing files)
+
+Rules:
+1. "high-risk" is for legitimate user operations that need confirmation, NOT for malicious attacks
+2. Do NOT upgrade low-risk requests to high-risk
+3. File creation on NEW paths is "normal" or "medium"
+4. File creation on EXISTING paths (overwrite) is "high-risk"
+5. Requests to delete user files or clear folders are "high-risk", not "malicious"
+
+User request: {request}
+
+Respond with ONLY one word: normal, sensitive, malicious, or high-risk
+          ]]>
+        </PromptTemplate>
+        <Fallback>若LLM调用失败，回退到基于关键词的规则分类（见KeywordRules）</Fallback>
+      </Implementation>
+    </Method>
+
+    <Method name="get_canned_response">
+      <Signature>
+        <Input>
+          <Parameter name="scenario" type="str" required="true">
+            <Description>拒绝场景标识</Description>
+            <ValidValues>malicious_system_attack, wechat_forward, sensitive_content, permission_denied</ValidValues>
+          </Parameter>
+        </Input>
+        <Output type="str">
+          <Description>固定拒绝文本</Description>
+        </Output>
+      </Signature>
+    </Method>
+  </Methods>
+
+  <KeywordRules>
+    <Rule category="malicious">
+      <Keywords>格式化, format, 删系统文件, 病毒, virus, 木马, trojan, 黑客, hack, 破解, crack</Keywords>
+      <Condition>请求明确涉及破坏系统、创建恶意软件</Condition>
+    </Rule>
+    <Rule category="high-risk">
+      <Keywords>删除, delete, 清空, 删掉, 全部删除, 覆盖, overwrite</Keywords>
+      <Condition>请求涉及删除用户文件、清空文件夹、覆盖已有文件</Condition>
+      <Note>必须是用户主动发起的合法操作，而非恶意攻击</Note>
+    </Rule>
+    <Rule category="sensitive">
+      <Keywords>薪资, salary, 工资, 密码, password, 身份证号</Keywords>
+      <Condition>请求涉及高隐私数据</Condition>
+    </Rule>
+  </KeywordRules>
+
+  <Integration>
+    <Upstream>
+      <From>L2.ControlGateway</From>
+      <Data>SessionContext.current_query</Data>
+    </Upstream>
+    <Downstream>
+      <To condition="normal/sensitive">ReActEngine / TaskPlanner</To>
+      <To condition="malicious">直接返回L2</To>
+      <To condition="high-risk">L5.ConfirmationManager（通过L2协调）</To>
+    </Downstream>
+  </Integration>
+
+  <Testing>
+    <Requirement>所有安全判断测试必须使用真实LLM</Requirement>
+    <TestCases>
+      <Case id="TC-SG-001">正常请求分类为normal（Python介绍、数学计算）</Case>
+      <Case id="TC-SG-002">恶意请求分类为malicious（格式化磁盘、创建病毒）</Case>
+      <Case id="TC-SG-003">高危请求分类为high-risk（删除文件、清空文件夹）</Case>
+      <Case id="TC-SG-004">敏感请求分类为sensitive（查询薪资）</Case>
+      <Case id="TC-SG-005">文件覆盖判定为high-risk（不得直接成功）</Case>
+      <Case id="TC-SG-006">低风险请求禁止升级为high-risk（"整理桌面建议"应为low）</Case>
+    </TestCases>
+  </Testing>
+
+  <ImplementationNotes>
+    <Note>现有代码位于 src/l3/l3_orchestration.py SecurityGuard 类</Note>
+    <Note>当前状态：classify() 返回硬编码 "normal"，需替换为LLM分类+关键词回退</Note>
+    <Note>当前状态：get_canned_response() 仅包含 wechat_forward，需补全全部4个场景</Note>
+    <Note>LLM分类需使用LLMManager，禁止直接实例化Provider</Note>
+  </ImplementationNotes>
+
+</Component>

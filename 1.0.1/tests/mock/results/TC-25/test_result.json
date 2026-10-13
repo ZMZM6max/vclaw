@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-25",
+  "test_name": "非技术语言转化测试",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "实际回复直接提到了“502 Bad Gateway”，与预期要求绝对禁止出现此类字眼且应改为轻描淡写的网络异常提示不一致。",
+  "final_response": "这看起来是网络代理返回的 502 Bad Gateway 错误，通常表示上游服务暂时不可用或网关连接异常。建议您稍后重试，或检查代理/上游服务是否正常运行；如果这是您的系统，我也可以继续帮您排查常见原因。",
+  "execution_time": 26.827175855636597,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-25",
+  "timestamp": "2026-04-21T18:25:45.150325"
+}

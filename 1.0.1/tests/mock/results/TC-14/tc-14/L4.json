@@ -1,0 +1,188 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:20:25.039459",
+  "execution_time": 7.774031639099121,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "01dc44ca-ae04-4c3e-af9a-c8a9620bd3fe",
+    "query": "搜索一下如何做红烧肉",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "results": [
+      {
+        "content": "红烧肉是一道经典中式家常菜，通常选用五花肉，先焯水去腥，再煸炒上色，加入冰糖、生抽、老抽、料酒、八角、桂皮等调味，小火慢炖至软烂入味。",
+        "score": 0.87,
+        "metadata": {
+          "source": "simulated_knowledge_base",
+          "topic": "红烧肉做法"
+        }
+      },
+      {
+        "content": "制作红烧肉的关键在于控火和炒糖色：糖色不宜过深，炖煮过程保持小火慢炖，能让肥瘦部分口感更加均衡。",
+        "score": 0.82,
+        "metadata": {
+          "source": "simulated_knowledge_base",
+          "topic": "烹饪技巧"
+        }
+      },
+      {
+        "content": "如果想让红烧肉更软糯，可以在炖煮时加入适量热水，并根据口味添加土豆、鹌鹑蛋或香菇增加层次感。",
+        "score": 0.76,
+        "metadata": {
+          "source": "simulated_knowledge_base",
+          "topic": "做法扩展"
+        }
+      }
+    ],
+    "query_embedding": [
+      0.012,
+      0.034,
+      0.056,
+      0.078,
+      0.091,
+      0.113,
+      0.135,
+      0.157,
+      0.179,
+      0.191,
+      0.213,
+      0.235,
+      0.257,
+      0.279,
+      0.291,
+      0.313,
+      0.335,
+      0.357,
+      0.379,
+      0.391,
+      0.413,
+      0.435,
+      0.457,
+      0.479,
+      0.491,
+      0.513,
+      0.535,
+      0.557,
+      0.579,
+      0.591,
+      0.613,
+      0.635,
+      0.657,
+      0.679,
+      0.691,
+      0.713,
+      0.735,
+      0.757,
+      0.779,
+      0.791,
+      0.813,
+      0.835,
+      0.857,
+      0.879,
+      0.891,
+      0.913,
+      0.935,
+      0.957,
+      0.979,
+      0.991
+    ],
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收检索请求: 搜索一下如何做红烧肉",
+      "[2] CacheManager检查: 未命中",
+      "[3] EmbeddingService: 生成1536维向量（模拟）",
+      "[4] VectorStore: 执行相似度检索（模拟余弦相似度）",
+      "[5] MemoryStore: 检索会话历史（无历史数据）",
+      "[6] 返回top 3结果",
+      "[7] CacheManager: 缓存结果"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已检查检索缓存，当前为未命中。",
+        "output_summary": "cache_hit=false"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "success",
+        "reason": "已为查询生成Embedding向量。",
+        "output_summary": "生成1536维查询向量"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "本次为检索操作，未执行文本分块。"
+      },
+      {
+        "component": "VectorStore",
+        "status": "success",
+        "reason": "已执行相似度检索并返回相关结果。",
+        "output_summary": "返回3条相似文档片段"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "success",
+        "reason": "已按请求检查会话历史，但当前无可返回历史记录。",
+        "output_summary": "session_id=01dc44ca-ae04-4c3e-af9a-c8a9620bd3fe, history_count=0"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "本次请求不是索引创建、更新或删除操作。"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收检索请求: 搜索一下如何做红烧肉",
+    "[2] CacheManager检查: 未命中",
+    "[3] EmbeddingService: 生成1536维向量（模拟）",
+    "[4] VectorStore: 执行相似度检索（模拟余弦相似度）",
+    "[5] MemoryStore: 检索会话历史（无历史数据）",
+    "[6] 返回top 3结果",
+    "[7] CacheManager: 缓存结果"
+  ],
+  "component_trace": [
+    {
+      "component": "CacheManager",
+      "status": "success",
+      "reason": "已检查检索缓存，当前为未命中。",
+      "output_summary": "cache_hit=false"
+    },
+    {
+      "component": "EmbeddingService",
+      "status": "success",
+      "reason": "已为查询生成Embedding向量。",
+      "output_summary": "生成1536维查询向量"
+    },
+    {
+      "component": "TextChunker",
+      "status": "skipped",
+      "reason": "本次为检索操作，未执行文本分块。"
+    },
+    {
+      "component": "VectorStore",
+      "status": "success",
+      "reason": "已执行相似度检索并返回相关结果。",
+      "output_summary": "返回3条相似文档片段"
+    },
+    {
+      "component": "MemoryStore",
+      "status": "success",
+      "reason": "已按请求检查会话历史，但当前无可返回历史记录。",
+      "output_summary": "session_id=01dc44ca-ae04-4c3e-af9a-c8a9620bd3fe, history_count=0"
+    },
+    {
+      "component": "IndexManager",
+      "status": "skipped",
+      "reason": "本次请求不是索引创建、更新或删除操作。"
+    }
+  ],
+  "error": null
+}

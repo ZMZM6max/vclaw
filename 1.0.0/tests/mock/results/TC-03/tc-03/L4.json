@@ -1,0 +1,119 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:15:25.719779",
+  "execution_time": 4.931631326675415,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "15f3521d-045f-4893-a4ff-5d3c9c1314b8",
+    "query": "找一下上周张总发我的那个Excel表格，名字好像叫什么成本的",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "operation": "retrieve_and_search",
+    "messages": [],
+    "results": [],
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search, session_id=15f3521d-045f-4893-a4ff-5d3c9c1314b8",
+      "[2] CacheManager检查: 未命中（无可复用的历史检索/Embedding缓存）",
+      "[3] EmbeddingService: 未执行（当前输入为组合检索请求，但缺少可直接执行的标准search/query检索上下文）",
+      "[4] TextChunker: 未执行（未提供待存储文档内容）",
+      "[5] VectorStore: 未执行（未触发标准向量检索或存储流程）",
+      "[6] MemoryStore: 尝试检索会话历史，但history_count=0且real_conversation_history为空，返回空结果",
+      "[7] IndexManager: 未执行（非创建/删除索引操作）",
+      "[8] 完成: 返回空的消息与检索结果"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已检查缓存，当前请求未命中可直接复用的数据。",
+        "output_summary": "cache_hit=false"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "当前输入不是标准search操作，且未进入可执行Embedding生成的流程。",
+        "output_summary": "未生成query embedding"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "未提供文档存储内容，因此无需分块。",
+        "output_summary": "未切分文本"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "未触发标准向量检索或向量写入流程。",
+        "output_summary": "未执行向量操作"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "success",
+        "reason": "已尝试检索会话历史，但当前无历史数据可返回。",
+        "output_summary": "retrieved_messages=0"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "当前请求不是索引创建或删除操作。",
+        "output_summary": "未执行索引管理"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search, session_id=15f3521d-045f-4893-a4ff-5d3c9c1314b8",
+    "[2] CacheManager检查: 未命中（无可复用的历史检索/Embedding缓存）",
+    "[3] EmbeddingService: 未执行（当前输入为组合检索请求，但缺少可直接执行的标准search/query检索上下文）",
+    "[4] TextChunker: 未执行（未提供待存储文档内容）",
+    "[5] VectorStore: 未执行（未触发标准向量检索或存储流程）",
+    "[6] MemoryStore: 尝试检索会话历史，但history_count=0且real_conversation_history为空，返回空结果",
+    "[7] IndexManager: 未执行（非创建/删除索引操作）",
+    "[8] 完成: 返回空的消息与检索结果"
+  ],
+  "component_trace": [
+    {
+      "component": "CacheManager",
+      "status": "success",
+      "reason": "已检查缓存，当前请求未命中可直接复用的数据。",
+      "output_summary": "cache_hit=false"
+    },
+    {
+      "component": "EmbeddingService",
+      "status": "skipped",
+      "reason": "当前输入不是标准search操作，且未进入可执行Embedding生成的流程。",
+      "output_summary": "未生成query embedding"
+    },
+    {
+      "component": "TextChunker",
+      "status": "skipped",
+      "reason": "未提供文档存储内容，因此无需分块。",
+      "output_summary": "未切分文本"
+    },
+    {
+      "component": "VectorStore",
+      "status": "skipped",
+      "reason": "未触发标准向量检索或向量写入流程。",
+      "output_summary": "未执行向量操作"
+    },
+    {
+      "component": "MemoryStore",
+      "status": "success",
+      "reason": "已尝试检索会话历史，但当前无历史数据可返回。",
+      "output_summary": "retrieved_messages=0"
+    },
+    {
+      "component": "IndexManager",
+      "status": "skipped",
+      "reason": "当前请求不是索引创建或删除操作。",
+      "output_summary": "未执行索引管理"
+    }
+  ],
+  "error": null
+}

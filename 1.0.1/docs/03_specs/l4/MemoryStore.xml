@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L4 Component: MemoryStore
+  拆分自: L4_MemoryKnowledge.xml
+  用途: 记忆存储器，管理长期记忆
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L4_MemoryKnowledge.xml
+-->
+<Component id="L4.MemoryStore" name="MemoryStore" version="1.0">
+
+  <Description>记忆存储器，管理长期记忆（用户历史对话、偏好、知识库元数据）</Description>
+
+  <StorageTypes>
+    <Type name="ConversationMemory">
+      <Description>对话历史存储</Description>
+      <Interface extends="ConversationMemory">
+        <Method name="save_conversation">保存对话历史</Method>
+        <Method name="load_conversation">加载对话历史</Method>
+        <Method name="delete_session">删除会话</Method>
+        <Method name="list_sessions">列出所有会话</Method>
+      </Interface>
+      <Implementations>
+        <Impl>InMemoryConversationMemory - 内存实现</Impl>
+      </Implementations>
+    </Type>
+
+    <Type name="UserPreferenceMemory">
+      <Description>用户偏好存储</Description>
+      <Interface extends="UserPreferenceMemory">
+        <Method name="save_preference">保存用户偏好</Method>
+        <Method name="load_preference">加载用户偏好</Method>
+      </Interface>
+      <Implementations>
+        <Impl>InMemoryUserPreferenceMemory - 内存实现</Impl>
+      </Implementations>
+    </Type>
+
+    <Type name="KnowledgeMemory">
+      <Description>系统知识库元数据存储（实际内容存储在VectorStore）</Description>
+      <Interface extends="KnowledgeMemory">
+        <Method name="store_knowledge">存储知识条目元数据</Method>
+        <Method name="retrieve_knowledge">检索知识条目</Method>
+        <Method name="list_knowledge">列出知识条目</Method>
+        <Method name="delete_knowledge">删除知识条目</Method>
+      </Interface>
+      <Implementations>
+        <Impl>InMemoryKnowledgeMemory - 内存实现</Impl>
+      </Implementations>
+    </Type>
+  </StorageTypes>
+
+  <UnifiedInterface>
+    <Description>MemoryStore是统一的抽象基类，继承自ConversationMemory和UserPreferenceMemory，用于向后兼容</Description>
+    <Implementations>
+      <Impl name="InMemoryStore">
+        <Description>内存统一存储，同时支持对话和偏好</Description>
+        <Features>
+          <Feature>自动压缩（当消息数超过阈值时）</Feature>
+          <Feature>会话元数据跟踪</Feature>
+        </Features>
+      </Impl>
+      <Impl name="FileMemoryStore">
+        <Description>文件持久化统一存储</Description>
+        <Configuration>
+          <Param name="storage_dir" default="./src/l4/data/conversations">存储目录</Param>
+        </Configuration>
+      </Impl>
+    </Implementations>
+  </UnifiedInterface>
+
+  <Compression>
+    <Component>MemoryCompressor</Component>
+    <Trigger>消息数超过 max_messages</Trigger>
+    <DefaultConfig>
+      <MaxMessages>20</MaxMessages>
+      <CompressionThreshold>10</CompressionThreshold>
+    </DefaultConfig>
+    <Process>
+      <Step order="1">保留最近 compression_threshold（默认10）条消息不压缩</Step>
+      <Step order="2">对更老的消息生成提取式摘要：
+        - 提取用户问题（截断100字符）
+        - 提取助手首句回复
+        - 超过5个要点时保留头2+尾2
+      </Step>
+      <Step order="3">将摘要包装为 role="system" 的消息：
+        {
+          "role": "system",
+          "content": "[Earlier conversation summary]: User asked: ... | Assistant responded about: ...",
+          "is_compressed": true,
+          "original_count": 15
+        }
+      </Step>
+      <Step order="4">替换老消息为摘要消息，保留最近消息</Step>
+    </Process>
+    <Features>
+      <Feature>不依赖LLM，避免递归API调用和费用</Feature>
+      <Feature>O(n)线性扫描，毫秒级完成</Feature>
+      <Feature>输出确定，无幻觉风险</Feature>
+    </Features>
+    <Methods>
+      <Method name="force_compress">强制压缩指定会话历史</Method>
+      <Method name="get_compression_stats">获取会话压缩统计（压缩比、原始消息数等）</Method>
+      <Method name="get_full_conversation">获取完整对话历史（含被压缩的部分）</Method>
+    </Methods>
+  </Compression>
+
+</Component>

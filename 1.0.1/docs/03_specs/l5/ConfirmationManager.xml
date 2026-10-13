@@ -1,0 +1,624 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L5 Component: ConfirmationManager
+  所属层: L5 - 能力抽象层 (Tools &amp; Capabilities)
+  创建时间: 2024
+  用途: 详细定义二次确认管理器组件的架构、风险挂起流程、确认模板与预扫描机制
+-->
+<ComponentSpec id="L5-CONFIRMATION-MANAGER" name="ConfirmationManager" layer="L5" version="1.0">
+
+  <!-- ==================== 1. 基本信息 ==================== -->
+  <Overview>
+    <Description>二次确认管理器，对高危操作判断是否需用户确认。负责评估操作风险等级、生成确认提示语、管理挂起操作的生命周期，以及协调预扫描（dry-run）获取统计摘要。ConfirmationManager是L5层人机协作安全机制的核心组件，确保用户在高危操作前有充分的知情权。</Description>
+    <Role>L5层人机协作安全守门员</Role>
+    <Responsibility>评估操作风险、触发二次确认、生成确认提示语、管理挂起状态、执行预扫描</Responsibility>
+  </Overview>
+
+  <!-- ==================== 2. 核心职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">评估操作风险等级（基于工具类型和参数）</Item>
+    <Item priority="critical">对高危操作触发二次确认，禁止直接拒绝或自动执行</Item>
+    <Item priority="high">生成确认提示语，说明操作内容和风险</Item>
+    <Item priority="high">高危操作前进行预扫描（dry-run）获取统计摘要</Item>
+    <Item priority="medium">管理挂起操作的生命周期（创建、确认、取消、过期）</Item>
+    <Item priority="medium">处理用户确认响应（确认/取消/超时）</Item>
+    <Item priority="low">记录确认审计日志</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 数据结构 ==================== -->
+  <DataStructures>
+    <Structure name="AgentAction">
+      <Description>工具调用指令（来自L3）</Description>
+      <Fields>
+        <Field name="action" type="str" required="true">工具名称</Field>
+        <Field name="action_input" type="dict" required="true">工具参数</Field>
+        <Field name="thought" type="Optional[str]" required="false">思考过程</Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="ConfirmationState">
+      <Description>挂起确认状态</Description>
+      <Fields>
+        <Field name="confirmation_id" type="str" required="true">
+          <Description>确认请求唯一标识（UUID）</Description>
+        </Field>
+        <Field name="status" type="str" required="true">
+          <Description>确认状态</Description>
+          <ValidValues>pending, confirmed, cancelled, expired</ValidValues>
+        </Field>
+        <Field name="action" type="AgentAction" required="true">
+          <Description>待确认的操作</Description>
+        </Field>
+        <Field name="user_id" type="str" required="true">
+          <Description>操作用户ID</Description>
+        </Field>
+        <Field name="session_id" type="str" required="true">
+          <Description>会话ID</Description>
+        </Field>
+        <Field name="prompt" type="str" required="true">
+          <Description>向用户展示的确认提示语</Description>
+        </Field>
+        <Field name="created_at" type="float" required="true">
+          <Description>创建时间戳</Description>
+        </Field>
+        <Field name="expires_at" type="float" required="true">
+          <Description>过期时间戳</Description>
+        </Field>
+        <Field name="pre_scan_summary" type="Optional[PreScanSummary]" required="false">
+          <Description>预扫描统计摘要</Description>
+        </Field>
+        <Field name="risk_level" type="str" required="true">
+          <Description>风险等级</Description>
+          <ValidValues>low, medium, high, critical</ValidValues>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="PreScanSummary">
+      <Description>预扫描统计摘要</Description>
+      <Fields>
+        <Field name="file_count" type="int" required="true">
+          <Description>涉及文件数量</Description>
+        </Field>
+        <Field name="directory_count" type="int" required="false" default="0">
+          <Description>涉及目录数量</Description>
+        </Field>
+        <Field name="total_size" type="int" required="false" default="0">
+          <Description>总大小（字节）</Description>
+        </Field>
+        <Field name="file_types" type="List[str]" required="false" default="[]">
+          <Description>文件类型分布（如["txt", "pdf", "docx"]）</Description>
+        </Field>
+        <Field name="affected_paths" type="List[str]" required="false" default="[]">
+          <Description>受影响的路径列表（最多显示10条）</Description>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="ConfirmationResponse">
+      <Description>用户确认响应</Description>
+      <Fields>
+        <Field name="confirmation_id" type="str" required="true"/>
+        <Field name="decision" type="str" required="true">
+          <Description>用户决策</Description>
+          <ValidValues>confirm, cancel, rename</ValidValues>
+          <Note>rename用于文件覆盖场景，用户选择重命名保存</Note>
+        </Field>
+        <Field name="new_name" type="Optional[str]" required="false">
+          <Description>新名称（decision=rename时）</Description>
+        </Field>
+        <Field name="responded_at" type="float" required="true">
+          <Description>响应时间戳</Description>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="PendingOperation">
+      <Description>兼容旧测试的简化挂起记录。用于向后兼容早期版本的确认管理接口。</Description>
+      <Fields>
+        <Field name="confirmation_id" type="str" required="true">
+          <Description>确认请求唯一标识</Description>
+        </Field>
+        <Field name="tool_name" type="str" required="true">
+          <Description>工具名称</Description>
+        </Field>
+        <Field name="params" type="dict" required="true">
+          <Description>工具参数</Description>
+        </Field>
+        <Field name="created_at" type="float" required="true">
+          <Description>创建时间戳</Description>
+        </Field>
+      </Fields>
+    </Structure>
+  </DataStructures>
+
+  <!-- ==================== 4. 触发条件 ==================== -->
+  <TriggerConditions>
+    <Condition id="TC-001">
+      <Description>工具类型为terminal且命令涉及写操作（rm, mv, &gt;, &gt;&gt;）</Description>
+      <Detection>BashAnalyzer返回WRITE分类</Detection>
+      <RiskLevel>high</RiskLevel>
+    </Condition>
+
+    <Condition id="TC-002">
+      <Description>工具类型为file_write且目标文件已存在</Description>
+      <Detection>os.path.exists(params["path"]) == true</Detection>
+      <RiskLevel>medium</RiskLevel>
+    </Condition>
+
+    <Condition id="TC-003">
+      <Description>工具类型为file_delete（删除单个文件或批量清空目录）</Description>
+      <Detection>tool.name == "file_delete"</Detection>
+      <RiskLevel>high</RiskLevel>
+    </Condition>
+
+    <Condition id="TC-004">
+      <Description>操作被PermissionManager标记为需确认</Description>
+      <Detection>PermissionResult.requires_confirmation == true</Detection>
+      <RiskLevel>medium</RiskLevel>
+    </Condition>
+
+    <Condition id="TC-005">
+      <Description>BashAnalyzer返回NETWORK或EXEC分类</Description>
+      <Detection>BashAnalyzer分类为NETWORK/EXEC</Detection>
+      <RiskLevel>high</RiskLevel>
+    </Condition>
+  </TriggerConditions>
+
+  <!-- ==================== 5. 确认提示模板 ==================== -->
+  <ConfirmationTemplates>
+    <Template scenario="delete_file">
+      <Description>删除单个文件</Description>
+      <Prompt>确定要删除《{filename}》吗？删了就找不回了哦。[确认/取消]</Prompt>
+      <Variables>
+        <Variable name="filename">文件名</Variable>
+      </Variables>
+      <RiskLevel>high</RiskLevel>
+    </Template>
+
+    <Template scenario="batch_delete">
+      <Description>批量删除/清空目录</Description>
+      <Prompt>{path} 里有 {count} 个文件（{file_types}），确定要全部清空吗？[确认/取消]</Prompt>
+      <Variables>
+        <Variable name="path">目标路径</Variable>
+        <Variable name="count">文件数量</Variable>
+        <Variable name="file_types">文件类型摘要（如"txt, pdf, docx"）</Variable>
+      </Variables>
+      <RiskLevel>high</RiskLevel>
+    </Template>
+
+    <Template scenario="file_overwrite">
+      <Description>文件覆盖</Description>
+      <Prompt>该位置已有同名文件，是否覆盖？[覆盖/重命名/取消]</Prompt>
+      <Variables/>
+      <RiskLevel>medium</RiskLevel>
+    </Template>
+
+    <Template scenario="terminal_write">
+      <Description>终端写操作</Description>
+      <Prompt>即将执行写操作命令：{command}，这可能会修改系统文件，确定继续吗？[确认/取消]</Prompt>
+      <Variables>
+        <Variable name="command">终端命令</Variable>
+      </Variables>
+      <RiskLevel>high</RiskLevel>
+    </Template>
+
+    <Template scenario="terminal_network">
+      <Description>终端网络操作</Description>
+      <Prompt>即将执行网络命令：{command}，这可能会访问外部网络，确定继续吗？[确认/取消]</Prompt>
+      <Variables>
+        <Variable name="command">终端命令</Variable>
+      </Variables>
+      <RiskLevel>high</RiskLevel>
+    </Template>
+
+    <Template scenario="permission_marked">
+      <Description>PermissionManager标记的确认操作</Description>
+      <Prompt>操作《{tool_name}》需要二次确认，确定继续吗？[确认/取消]</Prompt>
+      <Variables>
+        <Variable name="tool_name">工具名称</Variable>
+      </Variables>
+      <RiskLevel>medium</RiskLevel>
+    </Template>
+  </ConfirmationTemplates>
+
+  <!-- ==================== 6. 接口定义 ==================== -->
+  <Interface>
+    <Method name="needs_confirmation" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="action" type="AgentAction" required="true">
+            <Description>待评估的操作</Description>
+          </Parameter>
+          <Parameter name="user_permissions" type="dict" required="true">
+            <Description>用户权限信息</Description>
+          </Parameter>
+          <Parameter name="bash_analysis" type="Optional[dict]" required="false">
+            <Description>BashAnalyzer分析结果（终端命令时提供）</Description>
+          </Parameter>
+        </Input>
+        <Output type="bool">
+          <Description>是否需要二次确认</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step order="1">检查TriggerConditions，判断是否命中任何确认条件</Step>
+        <Step order="2">检查PermissionManager是否标记需确认</Step>
+        <Step order="3">若命中任一条件，返回True</Step>
+        <Step order="4">否则返回False</Step>
+      </Behavior>
+      <Rules>
+        <Rule priority="critical">对于用户主动发起的合法高危操作（如删除文件、清空文件夹），必须走ConfirmationManager挂起流程，禁止由SecurityGuard或PermissionManager直接拒绝</Rule>
+      </Rules>
+    </Method>
+
+    <Method name="generate_confirmation_prompt" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="action" type="AgentAction" required="true">
+            <Description>待确认的操作</Description>
+          </Parameter>
+          <Parameter name="pre_scan_summary" type="Optional[PreScanSummary]" required="false">
+            <Description>预扫描统计摘要</Description>
+          </Parameter>
+        </Input>
+        <Output type="str">
+          <Description>向用户展示的确认提示语</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 根据action类型选择确认模板</Step>
+        <Step>2. 若有pre_scan_summary，填充统计信息</Step>
+        <Step>3. 渲染模板并返回提示语</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="create_pending_confirmation" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="action" type="AgentAction" required="true"/>
+          <Parameter name="user_id" type="str" required="true"/>
+          <Parameter name="session_id" type="str" required="true"/>
+          <Parameter name="risk_level" type="str" required="true"/>
+        </Input>
+        <Output type="ConfirmationState">
+          <Description>创建的挂起确认状态</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step order="1">生成confirmation_id（UUID4）</Step>
+        <Step order="2">若风险等级为high/critical，执行pre_scan(action)</Step>
+        <Step order="3">调用generate_confirmation_prompt生成提示语</Step>
+        <Step order="4">创建ConfirmationState并存储</Step>
+        <Step order="5">启动过期定时器</Step>
+        <Step order="6">返回ConfirmationState</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="pre_scan" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="action" type="AgentAction" required="true">
+            <Description>待预扫描的操作</Description>
+          </Parameter>
+        </Input>
+        <Output type="PreScanSummary">
+          <Description>预扫描统计摘要</Description>
+        </Output>
+      </Signature>
+      <Description>高危操作前预扫描，获取统计摘要</Description>
+      <Behavior>
+        <Step order="1">调用ToolExecutor预扫描（dry-run模式）获取目标路径的元数据</Step>
+        <Step order="2">统计文件数量、类型分布、总大小</Step>
+        <Step order="3">收集受影响路径列表（最多10条）</Step>
+        <Step order="4">返回PreScanSummary</Step>
+      </Behavior>
+      <Note>预扫描不执行实际删除/写入操作，仅收集元数据用于用户决策</Note>
+      <Rules>
+        <Rule priority="high">高危操作前必须进行预扫描（dry-run）获取统计摘要：文件数量、类型分布、总大小</Rule>
+      </Rules>
+    </Method>
+
+    <Method name="handle_response" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="response" type="ConfirmationResponse" required="true">
+            <Description>用户确认响应</Description>
+          </Parameter>
+        </Input>
+        <Output type="ConfirmationState">
+          <Description>更新后的确认状态</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step order="1">查找confirmation_id对应的ConfirmationState</Step>
+        <Step order="2">若不存在或已过期，抛出InvalidConfirmationError</Step>
+        <Step order="3">更新status（confirmed/cancelled）</Step>
+        <Step order="4">若decision=rename，更新action中的path参数</Step>
+        <Step order="5">记录审计日志</Step>
+        <Step order="6">返回更新后的ConfirmationState</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="InvalidConfirmationError">
+          <Description>确认ID无效或已被消费</Description>
+          <ErrorCode>410</ErrorCode>
+        </Exception>
+        <Exception name="ConfirmationExpiredError">
+          <Description>确认请求已过期</Description>
+          <ErrorCode>408</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="get_pending_confirmation" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="confirmation_id" type="str" required="true"/>
+        </Input>
+        <Output type="Optional[ConfirmationState]">
+          <Description>挂起确认状态，不存在或已过期返回None</Description>
+        </Output>
+      </Signature>
+    </Method>
+
+    <Method name="expire_confirmation" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="confirmation_id" type="str" required="true"/>
+        </Input>
+        <Output type="bool"/>
+      </Signature>
+      <Description>手动将确认标记为过期</Description>
+    </Method>
+
+    <Method name="cleanup_expired" visibility="public">
+      <Signature>
+        <Input/>
+        <Output type="int">
+          <Description>清理的过期确认数量</Description>
+        </Output>
+      </Signature>
+      <Description>清理所有已过期的确认记录</Description>
+    </Method>
+
+    <!-- 旧接口兼容层 -->
+    <Method name="create_pending" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="tool_name" type="str" required="true">
+            <Description>工具名称</Description>
+          </Parameter>
+          <Parameter name="params" type="dict" required="true">
+            <Description>工具参数</Description>
+          </Parameter>
+        </Input>
+        <Output type="str">
+          <Description>确认请求ID（confirmation_id）</Description>
+        </Output>
+      </Signature>
+      <Description>旧接口：创建挂起确认，返回confirmation_id。内部代理到create_pending_confirmation。</Description>
+      <Note>保留用于向后兼容早期版本的测试和调用方</Note>
+    </Method>
+
+    <Method name="get_pending" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="confirmation_id" type="str" required="true">
+            <Description>确认请求唯一标识</Description>
+          </Parameter>
+        </Input>
+        <Output type="Optional[PendingOperation]">
+          <Description>有效的待确认操作，不存在或已过期返回None</Description>
+        </Output>
+      </Signature>
+      <Description>旧接口：获取有效的待确认操作。返回简化版的PendingOperation而非完整ConfirmationState。</Description>
+      <Note>保留用于向后兼容早期版本的测试和调用方</Note>
+    </Method>
+
+    <Method name="confirm_and_consume" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="confirmation_id" type="str" required="true">
+            <Description>确认请求唯一标识</Description>
+          </Parameter>
+        </Input>
+        <Output type="PendingOperation">
+          <Description>被确认的操作记录</Description>
+        </Output>
+      </Signature>
+      <Description>旧接口：确认并消费记录。验证confirmation_id有效且未过期，将状态更新为confirmed，返回PendingOperation。</Description>
+      <Exceptions>
+        <Exception name="InvalidConfirmationError">
+          <Description>确认ID无效或已被消费</Description>
+          <ErrorCode>410</ErrorCode>
+        </Exception>
+        <Exception name="ConfirmationExpiredError">
+          <Description>确认请求已过期</Description>
+          <ErrorCode>408</ErrorCode>
+        </Exception>
+      </Exceptions>
+      <Note>保留用于向后兼容早期版本的测试和调用方</Note>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 7. 关键规则 ==================== -->
+  <Rules>
+    <Rule priority="critical">对于用户主动发起的合法高危操作（如删除文件、清空文件夹），必须走ConfirmationManager挂起流程，禁止由SecurityGuard或PermissionManager直接拒绝</Rule>
+    <Rule priority="high">高危操作前必须进行预扫描（dry-run）获取统计摘要：文件数量、类型分布、总大小</Rule>
+    <Rule priority="high">确认提示语必须包含操作内容和风险说明，禁止模糊提示</Rule>
+    <Rule>挂起确认默认过期时间为300秒（5分钟）</Rule>
+    <Rule>同一用户的同一操作不允许创建多个pending确认（去重）</Rule>
+    <Rule>用户取消后，操作应彻底终止，禁止静默重试</Rule>
+  </Rules>
+
+  <!-- ==================== 8. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">ToolExecutor调用needs_confirmation(action, permissions)判断是否需要确认</Step>
+    <Step order="2" condition="需要确认">ToolExecutor调用create_pending_confirmation创建挂起状态</Step>
+    <Step order="3">ConfirmationManager执行pre_scan获取统计摘要（高危操作）</Step>
+    <Step order="4">ConfirmationManager生成确认提示语</Step>
+    <Step order="5">返回pending_confirmation状态给ToolExecutor</Step>
+    <Step order="6">ToolExecutor返回Observation给L3（携带confirmation_id和prompt）</Step>
+    <Step order="7">L3将确认提示展示给用户，等待响应</Step>
+    <Step order="8">用户响应后，L3调用handle_response处理</Step>
+    <Step order="9" condition="用户确认">恢复执行原始操作</Step>
+    <Step order="10" condition="用户取消">终止操作，返回取消提示</Step>
+  </DataFlow>
+
+  <!-- ==================== 9. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Consumer component="L5.ToolExecutor">
+        <Usage>执行前判断是否需要二次确认</Usage>
+        <Interface>ConfirmationManager.needs_confirmation(action, permissions)</Interface>
+      </Consumer>
+      <Consumer component="L3.ReActEngine">
+        <Usage>展示确认提示并处理用户响应</Usage>
+        <Interface>ConfirmationManager.handle_response(response)</Interface>
+      </Consumer>
+    </Upstream>
+
+    <Downstream>
+      <Dependency component="L5.BashAnalyzer">
+        <Usage>终端命令风险分类</Usage>
+        <Interface>BashAnalyzer.analyze(command)</Interface>
+      </Dependency>
+      <Dependency component="L5.PermissionManager">
+        <Usage>获取PermissionManager的confirm标记</Usage>
+        <Interface>PermissionResult.requires_confirmation</Interface>
+      </Dependency>
+      <Dependency component="L5.ToolExecutor">
+        <Usage>预扫描时调用ToolExecutor的dry-run模式</Usage>
+        <Interface>ToolExecutor.execute(tool, params, context, dry_run=true)</Interface>
+      </Dependency>
+    </Downstream>
+  </Coupling>
+
+  <!-- ==================== 10. 配置项 ==================== -->
+  <Configuration>
+    <Config name="CONFIRMATION_EXPIRY_SECONDS" type="int" default="300">
+      <Description>挂起确认默认过期时间（秒）</Description>
+    </Config>
+    <Config name="MAX_PENDING_PER_USER" type="int" default="5">
+      <Description>单个用户最大挂起确认数量</Description>
+    </Config>
+    <Config name="PRE_SCAN_ENABLED" type="bool" default="true">
+      <Description>是否启用预扫描</Description>
+    </Config>
+    <Config name="PRE_SCAN_MAX_FILES" type="int" default="100">
+      <Description>预扫描最大统计文件数</Description>
+    </Config>
+    <Config name="AUTO_CLEANUP_INTERVAL" type="int" default="3600">
+      <Description>自动清理过期确认的间隔（秒）</Description>
+    </Config>
+  </Configuration>
+
+  <!-- ==================== 11. 异常定义 ==================== -->
+  <Exceptions>
+    <Exception name="ConfirmationRequiredError">
+      <Description>需要用户确认（非真正错误，而是状态指示）</Description>
+      <Fields>
+        <Field name="confirmation_id" type="str">确认ID</Field>
+        <Field name="affected_count" type="int">影响数量</Field>
+      </Fields>
+    </Exception>
+    <Exception name="ConfirmationExpiredError">
+      <Description>确认请求已过期</Description>
+      <ErrorCode>408</ErrorCode>
+    </Exception>
+    <Exception name="InvalidConfirmationError">
+      <Description>确认ID无效或已被消费</Description>
+      <ErrorCode>410</ErrorCode>
+    </Exception>
+    <Exception name="MaxPendingExceeded">
+      <Description>用户挂起确认数量超过限制</Description>
+      <ErrorCode>429</ErrorCode>
+    </Exception>
+  </Exceptions>
+
+  <!-- ==================== 12. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="CM-001">
+      <Name>删除操作触发确认</Name>
+      <Steps>
+        <Step>构造file_delete操作</Step>
+        <Step>调用needs_confirmation</Step>
+      </Steps>
+      <Expected>返回True</Expected>
+    </TestCase>
+
+    <TestCase id="CM-002">
+      <Name>读取操作不触发确认</Name>
+      <Steps>
+        <Step>构造file_read操作</Step>
+        <Step>调用needs_confirmation</Step>
+      </Steps>
+      <Expected>返回False</Expected>
+    </TestCase>
+
+    <TestCase id="CM-003">
+      <Name>生成确认提示语-删除文件</Name>
+      <Input>
+        <Action>{"action": "file_delete", "action_input": {"path": "test.txt"}}</Action>
+      </Input>
+      <Expected>提示语包含"确定要删除《test.txt》吗？"</Expected>
+    </TestCase>
+
+    <TestCase id="CM-004">
+      <Name>创建挂起确认</Name>
+      <Steps>
+        <Step>调用create_pending_confirmation</Step>
+        <Step>验证返回的ConfirmationState</Step>
+      </Steps>
+      <Expected>状态为pending，包含confirmation_id和过期时间</Expected>
+    </TestCase>
+
+    <TestCase id="CM-005">
+      <Name>用户确认</Name>
+      <Steps>
+        <Step>创建pending确认</Step>
+        <Step>调用handle_response(decision=confirm)</Step>
+      </Steps>
+      <Expected>状态更新为confirmed</Expected>
+    </TestCase>
+
+    <TestCase id="CM-006">
+      <Name>用户取消</Name>
+      <Steps>
+        <Step>创建pending确认</Step>
+        <Step>调用handle_response(decision=cancel)</Step>
+      </Steps>
+      <Expected>状态更新为cancelled</Expected>
+    </TestCase>
+
+    <TestCase id="CM-007">
+      <Name>确认过期</Name>
+      <Steps>
+        <Step>创建pending确认（设置极短过期时间）</Step>
+        <Step>等待过期</Step>
+        <Step>尝试处理响应</Step>
+      </Steps>
+      <Expected>抛出ConfirmationExpiredError</Expected>
+    </TestCase>
+
+    <TestCase id="CM-008">
+      <Name>预扫描统计</Name>
+      <Steps>
+        <Step>创建包含多个文件的目录</Step>
+        <Step>构造批量删除操作</Step>
+        <Step>调用pre_scan</Step>
+      </Steps>
+      <Expected>PreScanSummary正确统计文件数量和类型</Expected>
+    </TestCase>
+  </Testing>
+
+  <!-- ==================== 13. 实现提示 ==================== -->
+  <ImplementationNotes>
+    <Note>挂起确认存储建议使用内存字典（开发）或Redis（生产），支持分布式会话</Note>
+    <Note>过期处理可使用asyncio.create_task定时清理，或惰性检查（访问时判断）</Note>
+    <Note>预扫描应使用dry-run模式，禁止实际执行操作</Note>
+    <Note>确认ID应使用UUID4，避免猜测攻击</Note>
+    <Note>同一用户的同一操作（相同action和params）应去重，避免创建多个pending</Note>
+  </ImplementationNotes>
+
+</ComponentSpec>

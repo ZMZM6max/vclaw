@@ -1,0 +1,92 @@
+{
+  "request_id": "tc-24",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:24:52.457893",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "帮我下载一份最新的中国地图全高清版",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "7bdea055-7f24-43c4-80fa-c7328dcb2088"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:25:04.643713",
+      "data": {
+        "session_context": {
+          "session_id": "7bdea055-7f24-43c4-80fa-c7328dcb2088",
+          "user_id": "test_user_001",
+          "current_query": "帮我下载一份最新的中国地图全高清版",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L2",
+      "type": "ResponseForSession",
+      "timestamp": "2026-04-21T18:25:12.602900",
+      "data": {
+        "response": "抱歉，我不能帮助下载或提供受版权保护的最新高清中国地图文件。不过我可以帮你查找官方公开的地图资源入口，或者帮你生成一份不含版权风险的示意地图。",
+        "session_id": "7bdea055-7f24-43c4-80fa-c7328dcb2088"
+      }
+    },
+    {
+      "step": 4,
+      "from": "L2",
+      "to": "L1",
+      "type": "ResponseWithHistory",
+      "timestamp": "2026-04-21T18:25:12.603024",
+      "data": {
+        "response": "抱歉，我不能帮助下载或提供受版权保护的最新高清中国地图文件。不过我可以帮你查找官方公开的地图资源入口，或者帮你生成一份不含版权风险的示意地图。",
+        "session_id": "7bdea055-7f24-43c4-80fa-c7328dcb2088",
+        "history_updated": true,
+        "history_length": 2
+      }
+    },
+    {
+      "step": 5,
+      "from": "L1",
+      "to": "User",
+      "type": "FinalOutput",
+      "timestamp": "2026-04-21T18:25:12.603092",
+      "data": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "output": "抱歉，我不能帮助下载或提供受版权保护的最新高清中国地图文件。不过我可以帮你查找官方公开的地图资源入口，或者帮你生成一份不含版权风险的示意地图。",
+        "format": "telegram"
+      }
+    }
+  ]
+}

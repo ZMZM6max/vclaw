@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-31",
+  "test_name": "飞书鉴权过期",
+  "status": "failed",
+  "e2e_status": "failed",
+  "semantic_match": true,
+  "semantic_reason": "",
+  "final_response": null,
+  "execution_time": 6.089401721954346,
+  "layer_count": 1,
+  "error_message": "L1错误: 不支持的渠道类型: feishu。仅支持 telegram, websocket, webhook。",
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-31",
+  "timestamp": "2026-04-21T18:28:27.347081"
+}

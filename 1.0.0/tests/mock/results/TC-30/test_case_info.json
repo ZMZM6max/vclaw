@@ -1,0 +1,37 @@
+{
+  "test_id": "TC-30",
+  "test_name": "复杂组合型链式任务",
+  "category": "正常功能",
+  "priority": "P0",
+  "user_input": "先把桌面那个'数据'重命名为'今日数据'，然后把它压缩打包发给飞书助手",
+  "precondition": "涉及 File_Rename -> File_Zip -> Feishu_Send 三步",
+  "react_flow": "Thought: 需要拆分步骤顺次执行 -> Action: 步骤1重命名成功 -> 步骤2打包成功 -> 步骤3发飞书成功",
+  "expected_result": "系统: 保持执行链不断，且中间产物正确流转。结果: 回复'搞定啦！名字改好了，也打成了压缩包发给您的飞书了。'",
+  "risk_level": "中 - 某一步骤失败导致后续链路错乱",
+  "test_type": "功能",
+  "tags": [
+    "可自动化",
+    "必过"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "先把桌面那个'数据'重命名为'今日数据'，然后把它压缩打包发给飞书助手"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:27:29.205074"
+}

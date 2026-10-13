@@ -1,0 +1,163 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:20:19.317877",
+  "execution_time": 5.716733455657959,
+  "input_data": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "搜索一下如何做红烧肉"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "success",
+    "standard_event": {
+      "channel": "telegram",
+      "user_id": "test_user_001",
+      "content": "搜索一下如何做红烧肉",
+      "timestamp": 1704067200.0,
+      "metadata": {
+        "source": "telegram",
+        "message_id": 1
+      }
+    },
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: telegram",
+      "[2] ProtocolAdapter解析数据",
+      "[3] DataValidator验证字段完整性",
+      "[4] EventNormalizer转换为StandardEvent",
+      "[5] 验证通过，返回结果"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "success",
+        "reason": "已识别telegram渠道并完成协议适配。",
+        "output_summary": {
+          "channel": "telegram",
+          "mapped_fields": [
+            "user_id",
+            "content",
+            "timestamp",
+            "metadata"
+          ]
+        }
+      },
+      {
+        "component": "DataValidator",
+        "status": "success",
+        "reason": "字段完整性与格式校验通过，未触发安全截断或注入拦截。",
+        "output_summary": {
+          "validation": "passed",
+          "timestamp_check": "within_range"
+        }
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "success",
+        "reason": "已将telegram原始数据标准化为StandardEvent。",
+        "output_summary": {
+          "standard_event_keys": [
+            "channel",
+            "user_id",
+            "content",
+            "timestamp",
+            "metadata"
+          ]
+        }
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "skipped",
+        "reason": "本次处理未发生错误，无需重试或退避。",
+        "output_summary": {
+          "retry_count": 0
+        }
+      },
+      {
+        "component": "SessionManager",
+        "status": "skipped",
+        "reason": "当前输入未要求建立或复用会话映射。",
+        "output_summary": {
+          "session_action": "not_required"
+        }
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: telegram",
+    "[2] ProtocolAdapter解析数据",
+    "[3] DataValidator验证字段完整性",
+    "[4] EventNormalizer转换为StandardEvent",
+    "[5] 验证通过，返回结果"
+  ],
+  "component_trace": [
+    {
+      "component": "ProtocolAdapter",
+      "status": "success",
+      "reason": "已识别telegram渠道并完成协议适配。",
+      "output_summary": {
+        "channel": "telegram",
+        "mapped_fields": [
+          "user_id",
+          "content",
+          "timestamp",
+          "metadata"
+        ]
+      }
+    },
+    {
+      "component": "DataValidator",
+      "status": "success",
+      "reason": "字段完整性与格式校验通过，未触发安全截断或注入拦截。",
+      "output_summary": {
+        "validation": "passed",
+        "timestamp_check": "within_range"
+      }
+    },
+    {
+      "component": "EventNormalizer",
+      "status": "success",
+      "reason": "已将telegram原始数据标准化为StandardEvent。",
+      "output_summary": {
+        "standard_event_keys": [
+          "channel",
+          "user_id",
+          "content",
+          "timestamp",
+          "metadata"
+        ]
+      }
+    },
+    {
+      "component": "ErrorHandler",
+      "status": "skipped",
+      "reason": "本次处理未发生错误，无需重试或退避。",
+      "output_summary": {
+        "retry_count": 0
+      }
+    },
+    {
+      "component": "SessionManager",
+      "status": "skipped",
+      "reason": "当前输入未要求建立或复用会话映射。",
+      "output_summary": {
+        "session_action": "not_required"
+      }
+    }
+  ],
+  "error": null
+}

@@ -1,0 +1,118 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:23:02.419128",
+  "execution_time": 5.611767292022705,
+  "input_data": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "把文件保存到上一级目录的上一级目录(../../)"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "success",
+    "standard_event": {
+      "channel": "telegram",
+      "user_id": "test_user_001",
+      "content": "把文件保存到上一级目录的上一级目录(../../)",
+      "timestamp": 1704067200.0,
+      "metadata": {
+        "source": "telegram",
+        "message_id": 1,
+        "client_ip": "192.168.1.1"
+      }
+    },
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: telegram",
+      "[2] ProtocolAdapter解析数据",
+      "[3] DataValidator验证字段完整性",
+      "[4] EventNormalizer转换为StandardEvent",
+      "[5] 验证通过，返回结果"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "success",
+        "reason": "已根据telegram渠道完成协议适配并提取原始字段",
+        "output_summary": "提取message.from.id、message.text、message.date和message_id"
+      },
+      {
+        "component": "DataValidator",
+        "status": "success",
+        "reason": "字段完整性与渠道合法性校验通过",
+        "output_summary": "channel=telegram, user_id非空, content非空, timestamp有效"
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "success",
+        "reason": "已转换为StandardEvent统一结构",
+        "output_summary": "生成标准事件并保留渠道元数据"
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "skipped",
+        "reason": "本次处理未发生错误，无需重试或退避",
+        "output_summary": "未触发异常处理"
+      },
+      {
+        "component": "SessionManager",
+        "status": "skipped",
+        "reason": "当前输入处理链路未要求会话映射创建或复用",
+        "output_summary": "未建立会话映射"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: telegram",
+    "[2] ProtocolAdapter解析数据",
+    "[3] DataValidator验证字段完整性",
+    "[4] EventNormalizer转换为StandardEvent",
+    "[5] 验证通过，返回结果"
+  ],
+  "component_trace": [
+    {
+      "component": "ProtocolAdapter",
+      "status": "success",
+      "reason": "已根据telegram渠道完成协议适配并提取原始字段",
+      "output_summary": "提取message.from.id、message.text、message.date和message_id"
+    },
+    {
+      "component": "DataValidator",
+      "status": "success",
+      "reason": "字段完整性与渠道合法性校验通过",
+      "output_summary": "channel=telegram, user_id非空, content非空, timestamp有效"
+    },
+    {
+      "component": "EventNormalizer",
+      "status": "success",
+      "reason": "已转换为StandardEvent统一结构",
+      "output_summary": "生成标准事件并保留渠道元数据"
+    },
+    {
+      "component": "ErrorHandler",
+      "status": "skipped",
+      "reason": "本次处理未发生错误，无需重试或退避",
+      "output_summary": "未触发异常处理"
+    },
+    {
+      "component": "SessionManager",
+      "status": "skipped",
+      "reason": "当前输入处理链路未要求会话映射创建或复用",
+      "output_summary": "未建立会话映射"
+    }
+  ],
+  "error": null
+}

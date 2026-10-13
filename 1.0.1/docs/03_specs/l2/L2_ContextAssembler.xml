@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L2 Component: ContextAssembler
+  拆分自: L2_ControlGateway.xml
+  用途: 上下文组装器，将 StandardEvent 转换为完整的 SessionContext
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L2_ControlGateway.xml
+  src/l2/docs/L2_ControlGateway.xml
+-->
+<Component id="L2.ContextAssembler" name="ContextAssembler" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>上下文组装器，将无状态的 StandardEvent 转换为有状态的 SessionContext。整合历史记录、工具列表与相关记忆</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">调用 HistoryRetriever 获取会话历史记录</Item>
+      <Item priority="high">填充 SessionContext 对象，包含 session_id、user_id、current_query、history、user_permissions、metadata</Item>
+      <Item priority="medium">持有 ToolPreparer 和 MemoryAccessor 实例供上层 ControlGateway 直接调用</Item>
+      <Item priority="medium">L4 不可用时降级处理（空历史），避免阻塞用户请求</Item>
+    </Responsibilities>
+
+    <SubComponents>
+      <SubComponent name="HistoryRetriever">
+        <Description>从 L4 获取用户历史对话。ContextAssembler 持有其实例并委托 retrieve 调用</Description>
+      </SubComponent>
+      <SubComponent name="ToolPreparer">
+        <Description>从 L5 获取可用工具列表。ContextAssembler 持有其实例，实际由 ControlGateway.process_event 直接调用 prepare_tools</Description>
+      </SubComponent>
+      <SubComponent name="MemoryAccessor">
+        <Description>从 L4 检索与用户当前查询相关的记忆片段。ContextAssembler 持有其实例，实际由 ControlGateway.process_event 直接调用 retrieve_relevant</Description>
+      </SubComponent>
+    </SubComponents>
+
+    <DataFlow>
+      <Step order="1">ControlGateway 调用 assemble(event, session_id, user_permissions)</Step>
+      <Step order="2">调用 history_retriever.retrieve(session_id, limit=10) 获取历史记录</Step>
+      <Step order="3">构造 SessionContext，填入 session_id、user_id、current_query、history、user_permissions</Step>
+      <Step order="4">构造 metadata = {"channel": event.channel, "event_metadata": event.metadata}</Step>
+      <Step order="5">返回 SessionContext 给 ControlGateway</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="assemble">
+      <Signature>assemble(event: StandardEvent, session_id: str, user_permissions: List[str]) -&gt; SessionContext</Signature>
+      <Description>组装完整的 SessionContext。委托 HistoryRetriever、ToolPreparer 和 MemoryAccessor 获取所需数据</Description>
+      <Input>
+        <Parameter name="event" type="StandardEvent" required="true">
+          <Description>来自 L1 的标准化事件，包含 user_id、content、channel、metadata</Description>
+        </Parameter>
+        <Parameter name="session_id" type="str" required="true">
+          <Description>由 SessionManager 创建或获取的会话 ID</Description>
+        </Parameter>
+        <Parameter name="user_permissions" type="List[str]" required="true">
+          <Description>用户权限列表，用于工具筛选</Description>
+        </Parameter>
+      </Input>
+      <Output type="SessionContext">
+        <Description>完整的会话上下文对象</Description>
+        <Fields>
+          <Field name="session_id" type="str">会话唯一标识</Field>
+          <Field name="user_id" type="str">用户唯一标识</Field>
+          <Field name="current_query" type="str">用户当前输入内容</Field>
+          <Field name="history" type="List[Dict]">OpenAI 格式的历史消息列表</Field>
+          <Field name="user_permissions" type="List[str]">用户权限列表</Field>
+          <Field name="metadata" type="Dict">包含 channel 与 event_metadata 的附加元数据</Field>
+        </Fields>
+      </Output>
+    </PrimaryMethod>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component id="L2.ControlGateway">L2 主入口</Component>
+      <Relation>被调用方（process_event 中调用 assemble）</Relation>
+    </Upstream>
+
+    <Downstream>
+      <Component id="L2.HistoryRetriever">历史记录检索器</Component>
+      <Relation>持有并委托 retrieve 调用</Relation>
+    </Downstream>
+
+    <Downstream>
+      <Component id="L2.ToolPreparer">工具准备器</Component>
+      <Relation>持有实例，实际由 ControlGateway 直接调用 prepare_tools</Relation>
+    </Downstream>
+
+    <Downstream>
+      <Layer id="L4">记忆与知识层</Layer>
+      <Relation>通过 HistoryRetriever 间接调用 L4.retrieve_history()；MemoryAccessor 由 ControlGateway 直接调用</Relation>
+      <DataFormat>OpenAI 消息格式列表 / 记忆内容字符串列表</DataFormat>
+    </Downstream>
+
+    <Downstream>
+      <Layer id="L5">能力抽象层</Layer>
+      <Relation>ToolPreparer 由 ControlGateway 直接调用 L5.list_tools()</Relation>
+      <DataFormat>工具定义字典列表</DataFormat>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>core.models.StandardEvent - 输入数据结构</Dependency>
+        <Dependency>core.models.SessionContext - 输出数据结构</Dependency>
+        <Dependency>core.interfaces.MemoryInterface - L4 接口抽象</Dependency>
+        <Dependency>core.interfaces.ToolsInterface - L5 接口抽象</Dependency>
+        <Dependency>L2.HistoryRetriever - 历史记录检索</Dependency>
+        <Dependency>L2.ToolPreparer - 工具准备</Dependency>
+      </Internal>
+    </Dependencies>
+
+    <CouplingStrength>中耦合</CouplingStrength>
+    <CouplingType>控制耦合（聚合调用 HistoryRetriever、ToolPreparer、MemoryAccessor）+ 数据耦合</CouplingType>
+
+    <Note>
+      ContextAssembler 是 L2 内部的协调组件，将多个子组件的结果整合为统一的 SessionContext。
+      不直接依赖 L4/L5 的具体实现，通过接口抽象和子组件间接访问。
+    </Note>
+  </Coupling>
+
+</Component>

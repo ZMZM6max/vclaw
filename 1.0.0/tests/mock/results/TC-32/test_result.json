@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-32",
+  "test_name": "无意义的打断",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "实际回复表达的是“可以直接告诉我具体要做什么”，与预期要求的固定回应“我在呢，您想到了什么随时告诉我～”语义和措辞不一致。",
+  "final_response": "我在，这里～你可以直接告诉我具体要做什么。",
+  "execution_time": 23.730773448944092,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-32",
+  "timestamp": "2026-04-21T18:28:54.619817"
+}

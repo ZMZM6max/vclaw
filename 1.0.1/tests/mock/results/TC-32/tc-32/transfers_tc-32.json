@@ -1,0 +1,92 @@
+{
+  "request_id": "tc-32",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:28:33.879228",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "等一下 或 啊对了 (不含具体指令)",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "ba85a8e1-7d74-43d2-9737-b64cdb48be45"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:28:46.843616",
+      "data": {
+        "session_context": {
+          "session_id": "2f6f3d7d-9d2e-4e7d-9f6a-3f0d2d4c8b11",
+          "user_id": "test_user_001",
+          "current_query": "等一下 或 啊对了 (不含具体指令)",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L2",
+      "type": "ResponseForSession",
+      "timestamp": "2026-04-21T18:28:52.079523",
+      "data": {
+        "response": "我在，这里～你可以直接告诉我具体要做什么。",
+        "session_id": "2f6f3d7d-9d2e-4e7d-9f6a-3f0d2d4c8b11"
+      }
+    },
+    {
+      "step": 4,
+      "from": "L2",
+      "to": "L1",
+      "type": "ResponseWithHistory",
+      "timestamp": "2026-04-21T18:28:52.079736",
+      "data": {
+        "response": "我在，这里～你可以直接告诉我具体要做什么。",
+        "session_id": "2f6f3d7d-9d2e-4e7d-9f6a-3f0d2d4c8b11",
+        "history_updated": true,
+        "history_length": 2
+      }
+    },
+    {
+      "step": 5,
+      "from": "L1",
+      "to": "User",
+      "type": "FinalOutput",
+      "timestamp": "2026-04-21T18:28:52.079794",
+      "data": {
+        "channel": "telegram",
+        "user_id": "test_user_001",
+        "output": "我在，这里～你可以直接告诉我具体要做什么。",
+        "format": "telegram"
+      }
+    }
+  ]
+}

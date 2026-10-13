@@ -1,0 +1,76 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:14:24.837747",
+  "execution_time": 4.304669380187988,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "30aee144-5dc2-4d44-8592-399ef4809a4b",
+    "query": "帮我在桌面上建个文档，写上今天下午3点开周会",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "results": [],
+    "query_embedding": null,
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收检索请求: 帮我在桌面上建个文档，写上今天下午3点开周会",
+      "[2] CacheManager检查: 未命中（当前输入未提供可复用缓存）",
+      "[3] EmbeddingService: 未执行（当前任务为模拟检索编排，未提供可实际生成的向量服务结果）",
+      "[4] VectorStore: 未执行相似度检索（当前未提供可检索的向量索引内容）",
+      "[5] 返回top 0结果",
+      "[6] CacheManager: 未缓存结果（无检索结果可缓存）"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "完成缓存检查以判断是否命中已有检索/Embedding结果",
+        "output_summary": "未命中缓存"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "当前请求未实际触发可执行的Embedding生成流程",
+        "output_summary": "未生成query embedding"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "当前操作不是store，不需要进行文本分块",
+        "output_summary": "未分块"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "当前未提供可检索的向量数据集，无法执行真实相似度检索",
+        "output_summary": "未返回向量检索结果"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "skipped",
+        "reason": "当前输入未要求对话历史存储或历史检索",
+        "output_summary": "未访问会话记忆"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "当前操作不是索引创建/删除任务",
+        "output_summary": "未进行索引管理"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收检索请求: 帮我在桌面上建个文档，写上今天下午3点开周会",
+    "[2] CacheManager检查: 未命中（当前输入未提供可复用缓存）",
+    "[3] EmbeddingService: 未执行（当前任务为模拟检索编排，未提供可实际生成的向量服务结果）",
+    "[4] VectorStore: 未执行相似度检索（当前未提供可检索的向量索引内容）",
+    "[5] 返回top 0结果",
+    "[6] CacheManager: 未缓存结果（无检索结果可缓存）"
+  ],
+  "error": null
+}

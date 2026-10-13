@@ -1,0 +1,117 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:23:33.551454",
+  "execution_time": 5.801790714263916,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "342e148a-47f8-4f98-aa8e-117ae3fa236c",
+    "query": "把那个1G的视频文件移动到桌面",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "operation": "retrieve_and_search",
+    "results": [],
+    "query_embedding": null,
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search, query=把那个1G的视频文件移动到桌面",
+      "[2] CacheManager检查: 未命中（无可用缓存项）",
+      "[3] EmbeddingService: skipped（当前操作为retrieve_and_search，未定义Embedding生成步骤）",
+      "[4] VectorStore: skipped（未提供可检索的向量索引/未执行search标准流程）",
+      "[5] MemoryStore: 检查会话历史与已知记忆；history_count=0, real_conversation_history为空",
+      "[6] IndexManager: skipped（当前请求未涉及索引创建/删除）",
+      "[7] 返回: 未检索到可用历史或向量结果，结果集为空"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已完成缓存检查，但未命中可复用结果。",
+        "output_summary": "cache_miss"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "当前输入为retrieve_and_search复合请求，规范未定义该操作的Embedding生成流程。",
+        "output_summary": "not_applicable"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "本次请求不涉及文档存储，因此未执行文本分块。",
+        "output_summary": "not_applicable"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "当前请求未进入标准search检索流程，且无可检索向量数据可用。",
+        "output_summary": "no_vector_search_executed"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "success",
+        "reason": "已检查历史记忆输入，发现session历史为空。",
+        "output_summary": "retrieved_0_messages"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "当前请求不涉及索引创建、更新或删除。",
+        "output_summary": "not_applicable"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search, query=把那个1G的视频文件移动到桌面",
+    "[2] CacheManager检查: 未命中（无可用缓存项）",
+    "[3] EmbeddingService: skipped（当前操作为retrieve_and_search，未定义Embedding生成步骤）",
+    "[4] VectorStore: skipped（未提供可检索的向量索引/未执行search标准流程）",
+    "[5] MemoryStore: 检查会话历史与已知记忆；history_count=0, real_conversation_history为空",
+    "[6] IndexManager: skipped（当前请求未涉及索引创建/删除）",
+    "[7] 返回: 未检索到可用历史或向量结果，结果集为空"
+  ],
+  "component_trace": [
+    {
+      "component": "CacheManager",
+      "status": "success",
+      "reason": "已完成缓存检查，但未命中可复用结果。",
+      "output_summary": "cache_miss"
+    },
+    {
+      "component": "EmbeddingService",
+      "status": "skipped",
+      "reason": "当前输入为retrieve_and_search复合请求，规范未定义该操作的Embedding生成流程。",
+      "output_summary": "not_applicable"
+    },
+    {
+      "component": "TextChunker",
+      "status": "skipped",
+      "reason": "本次请求不涉及文档存储，因此未执行文本分块。",
+      "output_summary": "not_applicable"
+    },
+    {
+      "component": "VectorStore",
+      "status": "skipped",
+      "reason": "当前请求未进入标准search检索流程，且无可检索向量数据可用。",
+      "output_summary": "no_vector_search_executed"
+    },
+    {
+      "component": "MemoryStore",
+      "status": "success",
+      "reason": "已检查历史记忆输入，发现session历史为空。",
+      "output_summary": "retrieved_0_messages"
+    },
+    {
+      "component": "IndexManager",
+      "status": "skipped",
+      "reason": "当前请求不涉及索引创建、更新或删除。",
+      "output_summary": "not_applicable"
+    }
+  ],
+  "error": null
+}

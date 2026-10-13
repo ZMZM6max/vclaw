@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L5 Component: ParameterValidator
+  所属层: L5 - 能力抽象层 (Tools &amp; Capabilities)
+  创建时间: 2024
+  用途: 详细定义参数验证器组件的架构、接口、验证规则与保真校验机制
+-->
+<ComponentSpec id="L5-PARAM-VALIDATOR" name="ParameterValidator" layer="L5" version="1.0">
+
+  <!-- ==================== 1. 基本信息 ==================== -->
+  <Overview>
+    <Description>参数验证器，负责校验LLM生成的工具参数是否符合JSON Schema规范，同时执行参数保真校验以防止LLM幻觉篡改用户原始输入。作为L5层安全防线的重要组成部分，ParameterValidator在工具执行前拦截非法参数。</Description>
+    <Role>L5层参数安全守门员</Role>
+    <Responsibility>验证工具参数合法性、执行参数保真校验、提供参数清洗能力</Responsibility>
+  </Overview>
+
+  <!-- ==================== 2. 核心职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">JSON Schema参数校验（类型、必填、格式、范围）</Item>
+    <Item priority="critical">参数保真校验（对比用户原始输入，检测LLM幻觉覆盖）</Item>
+    <Item priority="high">路径安全校验（防止目录遍历攻击）</Item>
+    <Item priority="high">参数清洗（去除危险字符、规范化路径）</Item>
+    <Item priority="medium">自定义校验规则扩展（支持业务级验证逻辑）</Item>
+    <Item priority="medium">错误信息格式化（为LLM提供可理解的修复提示）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 数据结构 ==================== -->
+  <DataStructures>
+    <Structure name="ValidationResult">
+      <Description>参数验证结果</Description>
+      <Fields>
+        <Field name="is_valid" type="bool" required="true">
+          <Description>验证是否通过</Description>
+        </Field>
+        <Field name="errors" type="List[ValidationErrorDetail]" required="true">
+          <Description>验证错误列表（空列表表示无错误）</Description>
+        </Field>
+        <Field name="sanitized_params" type="Optional[dict]" required="false">
+          <Description>清洗后的参数（仅当验证通过时返回）</Description>
+        </Field>
+        <Field name="fidelity_check" type="Optional[FidelityCheckResult]" required="false">
+          <Description>保真校验结果（若执行了保真校验）</Description>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="ValidationErrorDetail">
+      <Description>单个验证错误详情</Description>
+      <Fields>
+        <Field name="field" type="str" required="true">
+          <Description>出错的参数字段路径（如"path"、"content"）</Description>
+        </Field>
+        <Field name="error_type" type="str" required="true">
+          <Description>错误类型</Description>
+          <ValidValues>type_error, missing_required, format_error, range_error, path_traversal, fidelity_mismatch, custom_rule</ValidValues>
+        </Field>
+        <Field name="message" type="str" required="true">
+          <Description>用户友好的错误描述（中文）</Description>
+          <Example>参数"path"的类型应为字符串，实际收到数字</Example>
+        </Field>
+        <Field name="suggestion" type="Optional[str]" required="false">
+          <Description>修复建议</Description>
+          <Example>请提供有效的文件路径字符串</Example>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="FidelityCheckResult">
+      <Description>参数保真校验结果</Description>
+      <Fields>
+        <Field name="is_consistent" type="bool" required="true">
+          <Description>用户原始输入与LLM参数是否一致</Description>
+        </Field>
+        <Field name="mismatches" type="List[FidelityMismatch]" required="true">
+          <Description>不一致项列表</Description>
+        </Field>
+        <Field name="raw_payload" type="dict" required="false">
+          <Description>用户原始输入中的关键字段（用于调试）</Description>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="FidelityMismatch">
+      <Description>保真不一致项</Description>
+      <Fields>
+        <Field name="field" type="str" required="true">
+          <Description>不一致的字段名</Description>
+        </Field>
+        <Field name="raw_value" type="Any" required="true">
+          <Description>用户原始输入值</Description>
+        </Field>
+        <Field name="llm_value" type="Any" required="true">
+          <Description>LLM生成的参数值</Description>
+        </Field>
+        <Field name="mismatch_type" type="str" required="true">
+          <Description>不一致类型</Description>
+          <ValidValues>path_modified, content_modified, value_added, value_removed, type_changed</ValidValues>
+        </Field>
+      </Fields>
+    </Structure>
+  </DataStructures>
+
+  <!-- ==================== 4. 接口定义 ==================== -->
+  <Interface>
+    <Method name="validate" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true">
+            <Description>LLM生成的工具参数</Description>
+            <Example>{"path": "/tmp/test.txt", "content": "Hello World"}</Example>
+          </Parameter>
+          <Parameter name="schema" type="dict" required="true">
+            <Description>工具的JSON Schema参数定义</Description>
+          </Parameter>
+          <Parameter name="raw_user_payload" type="Optional[dict]" required="false" default="None">
+            <Description>用户原始输入中的关键字段（来自L1.DataValidator），用于保真校验</Description>
+            <Note>若提供此参数，则额外执行保真校验</Note>
+          </Parameter>
+          <Parameter name="tool_name" type="Optional[str]" required="false">
+            <Description>工具名称（用于错误信息定位和自定义规则匹配）</Description>
+          </Parameter>
+        </Input>
+        <Output type="ValidationResult">
+          <Description>验证结果，包含是否通过、错误列表、清洗后参数</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step order="1">执行JSON Schema校验（类型、必填、格式、范围）</Step>
+        <Step order="2">若Schema校验失败，收集所有错误并返回ValidationResult(is_valid=false)</Step>
+        <Step order="3">执行路径安全校验（检查path字段是否包含../等遍历字符）</Step>
+        <Step order="4">若raw_user_payload存在，执行保真校验</Step>
+        <Step order="5">若保真校验失败，添加fidelity_mismatch错误</Step>
+        <Step order="6">执行工具自定义校验规则（如有）</Step>
+        <Step order="7">若全部通过，返回ValidationResult(is_valid=true, sanitized_params=清洗后参数)</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="InvalidSchemaError">
+          <Description>提供的JSON Schema本身不合法</Description>
+          <ErrorCode>400</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="sanitize" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true">
+            <Description>原始参数字典</Description>
+          </Parameter>
+          <Parameter name="schema" type="dict" required="true">
+            <Description>JSON Schema定义</Description>
+          </Parameter>
+        </Input>
+        <Output type="dict">
+          <Description>清洗后的参数字典</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 去除参数字符串值的首尾空白</Step>
+        <Step>2. 规范化路径参数（解析..和.，但保留在沙盒范围内）</Step>
+        <Step>3. 将数字字符串转换为对应数字类型（若schema要求）</Step>
+        <Step>4. 过滤schema中未定义的额外参数（根据additionalProperties设置）</Step>
+        <Step>5. 为可选参数填充默认值（若schema定义了default）</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="check_fidelity" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true">
+            <Description>LLM生成的参数</Description>
+          </Parameter>
+          <Parameter name="raw_user_payload" type="dict" required="true">
+            <Description>用户原始输入中的关键字段</Description>
+            <Fields>
+              <Field name="path">用户明确提到的文件路径</Field>
+              <Field name="content">用户明确提供的内容</Field>
+              <Field name="command">用户明确的命令</Field>
+              <Field name="query">用户明确的查询词</Field>
+            </Fields>
+          </Parameter>
+        </Input>
+        <Output type="FidelityCheckResult">
+          <Description>保真校验结果</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 提取raw_user_payload中的关键字段</Step>
+        <Step>2. 对比params中对应字段的值</Step>
+        <Step>3. 路径一致性检查：LLM生成的path必须与用户原始路径一致（允许沙盒前缀转换）</Step>
+        <Step>4. 内容一致性检查：LLM生成的content必须与用户原始内容一致</Step>
+        <Step>5. 检查是否有字段被LLM擅自添加或删除</Step>
+        <Step>6. 返回FidelityCheckResult</Step>
+      </Behavior>
+      <Rules>
+        <Rule>允许沙盒前缀转换（如用户说"test.txt"，LLM生成"/sandbox/test.txt"视为一致）</Rule>
+        <Rule>禁止内容篡改（LLM不得添加、删除或修改用户明确指定的内容）</Rule>
+        <Rule>路径规范化后对比（如"/a/b/../c"等同于"/a/c"）</Rule>
+      </Rules>
+    </Method>
+
+    <Method name="add_custom_rule" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="tool_name" type="str" required="true">
+            <Description>适用的工具名称</Description>
+          </Parameter>
+          <Parameter name="rule" type="Callable" required="true">
+            <Description>自定义校验函数，签名为fn(params: dict) -&gt; Optional[ValidationErrorDetail]</Description>
+          </Parameter>
+        </Input>
+        <Output type="None"/>
+      </Signature>
+      <Description>为特定工具添加自定义校验规则</Description>
+    </Method>
+
+    <Method name="is_path_safe" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="path" type="str" required="true">
+            <Description>要检查的文件路径</Description>
+          </Parameter>
+        </Input>
+        <Output type="bool">
+          <Description>路径是否安全</Description>
+        </Output>
+      </Signature>
+      <Description>向后兼容方法：检查路径是否安全。内部调用_path_security校验，捕获PathTraversalError后返回False。</Description>
+    </Method>
+
+    <Method name="validate_terminal_command" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="command" type="str" required="true">
+            <Description>终端命令字符串</Description>
+          </Parameter>
+        </Input>
+        <Output type="bool">
+          <Description>命令是否通过基础安全检查</Description>
+        </Output>
+      </Signature>
+      <Description>向后兼容方法：验证终端命令是否包含已知危险操作（如rm -rf /、eval、sudo等）。</Description>
+    </Method>
+
+    <Method name="validate_sandbox_path" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="path" type="str" required="true">
+            <Description>要验证的文件路径</Description>
+          </Parameter>
+        </Input>
+        <Output type="_CompatValidationResult">
+          <Description>兼容旧格式的验证结果对象（含.valid和.errors属性）</Description>
+        </Output>
+      </Signature>
+      <Description>向后兼容方法：沙盒路径验证。要求路径必须以documents/开头，禁止目录遍历和绝对路径。返回兼容旧格式的结果对象。</Description>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 验证规则详情 ==================== -->
+  <ValidationRules>
+    <RuleCategory name="schema_validation">
+      <Description>基于JSON Schema的标准验证</Description>
+      <Rules>
+        <Rule id="V-SCHEMA-01">参数类型匹配（type: string/number/integer/boolean/array/object）</Rule>
+        <Rule id="V-SCHEMA-02">必需字段检查（required字段必须存在且非None）</Rule>
+        <Rule id="V-SCHEMA-03">字符串长度限制（minLength/maxLength）</Rule>
+        <Rule id="V-SCHEMA-04">数值范围限制（minimum/maximum/exclusiveMinimum/exclusiveMaximum）</Rule>
+        <Rule id="V-SCHEMA-05">枚举值检查（enum）</Rule>
+        <Rule id="V-SCHEMA-06">正则格式匹配（pattern）</Rule>
+        <Rule id="V-SCHEMA-07">数组长度和元素类型（minItems/maxItems/items）</Rule>
+        <Rule id="V-SCHEMA-08">对象额外属性控制（additionalProperties/properties）</Rule>
+      </Rules>
+      <Library>jsonschema (Python库)</Library>
+    </RuleCategory>
+
+    <RuleCategory name="path_security">
+      <Description>路径安全校验</Description>
+      <Rules>
+        <Rule id="V-PATH-01">禁止包含".."序列（目录遍历攻击防护）</Rule>
+        <Rule id="V-PATH-02">禁止以"/"开头的绝对路径（除非在允许列表中）</Rule>
+        <Rule id="V-PATH-03">禁止包含空字节（\x00）和空字符串</Rule>
+        <Rule id="V-PATH-04">禁止指向系统敏感目录（/etc, /proc, /sys, C:\Windows等）</Rule>
+        <Rule id="V-PATH-05">路径必须位于沙盒根目录内（允许沙盒前缀）</Rule>
+        <Rule id="V-PATH-06">最长路径长度限制（4096字符）</Rule>
+      </Rules>
+    </RuleCategory>
+
+    <RuleCategory name="fidelity_check">
+      <Description>参数保真校验（防止LLM幻觉）</Description>
+      <Rules>
+        <Rule id="V-FID-01" priority="high">文件路径一致性：LLM生成的path必须与用户原始输入中的路径一致（允许沙盒前缀转换，禁止内容篡改）</Rule>
+        <Rule id="V-FID-02" priority="high">内容一致性：LLM生成的content必须与用户原始输入中的内容一致（禁止添加、删除或修改用户明确指定的内容）</Rule>
+        <Rule id="V-FID-03">命令一致性：LLM生成的command必须与用户原始命令一致</Rule>
+        <Rule id="V-FID-04">查询词一致性：LLM生成的query必须与用户原始查询词一致</Rule>
+        <Rule id="V-FID-05">若raw_user_payload中某字段不存在，则不执行该字段的保真校验</Rule>
+      </Rules>
+      <ActionOnMismatch>
+        <Action>返回ValidationError，错误信息："参数与用户原始输入不一致，请确认"</Action>
+        <Action>详细说明不一致字段和类型</Action>
+        <Action>禁止自动修正，必须交由L3决策</Action>
+      </ActionOnMismatch>
+    </RuleCategory>
+
+    <RuleCategory name="content_safety">
+      <Description>内容安全校验</Description>
+      <Rules>
+        <Rule id="V-CONTENT-01">字符串参数最大长度10000字符</Rule>
+        <Rule id="V-CONTENT-02">禁止包含不可见控制字符（除\n\t\r外）</Rule>
+        <Rule id="V-CONTENT-03">代码类参数（code/command）需经过BashAnalyzer初步扫描</Rule>
+      </Rules>
+    </RuleCategory>
+  </ValidationRules>
+
+  <!-- ==================== 6. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">L5.ToolExecutor接收工具调用请求（含params和tool定义）</Step>
+    <Step order="2">ToolExecutor调用ParameterValidator.validate(params, schema, raw_user_payload)</Step>
+    <Step order="3">ParameterValidator执行JSON Schema校验</Step>
+    <Step order="4">ParameterValidator执行路径安全校验（若参数包含path字段）</Step>
+    <Step order="5" condition="raw_user_payload存在">ParameterValidator执行保真校验</Step>
+    <Step order="6" condition="校验失败">返回ValidationResult(is_valid=false, errors=[...])</Step>
+    <Step order="7" condition="校验通过">返回ValidationResult(is_valid=true, sanitized_params={...})</Step>
+    <Step order="8">ToolExecutor根据ValidationResult决定继续执行或返回错误Observation</Step>
+  </DataFlow>
+
+  <!-- ==================== 7. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Consumer component="L5.ToolExecutor">
+        <Usage>执行参数校验</Usage>
+        <Interface>ParameterValidator.validate(params, schema, raw_user_payload)</Interface>
+      </Consumer>
+    </Upstream>
+
+    <Downstream>
+      <Dependency component="L1.DataValidator">
+        <Usage>获取用户原始输入raw_user_payload用于保真校验</Usage>
+        <DataFlow>L1.DataValidator → L2 → L3 → L5.ParameterValidator</DataFlow>
+        <Note>raw_user_payload通过SessionContext或AgentAction的metadata传递</Note>
+      </Dependency>
+    </Downstream>
+
+    <ExternalDependencies>
+      <Dependency library="jsonschema">
+        <Usage>JSON Schema验证</Usage>
+        <Version>&gt;=4.0.0</Version>
+      </Dependency>
+    </ExternalDependencies>
+  </Coupling>
+
+  <!-- ==================== 8. 配置项 ==================== -->
+  <Configuration>
+    <Config name="SCHEMA_VALIDATION_ENABLED" type="bool" default="true">
+      <Description>是否启用JSON Schema验证</Description>
+    </Config>
+    <Config name="PATH_VALIDATION_ENABLED" type="bool" default="true">
+      <Description>是否启用路径安全校验</Description>
+    </Config>
+    <Config name="FIDELITY_CHECK_ENABLED" type="bool" default="true">
+      <Description>是否启用保真校验（需要raw_user_payload支持）</Description>
+    </Config>
+    <Config name="MAX_STRING_LENGTH" type="int" default="10000">
+      <Description>字符串参数最大长度</Description>
+    </Config>
+    <Config name="SANDBOX_ROOT" type="str" default="/sandbox">
+      <Description>沙盒根目录路径</Description>
+    </Config>
+    <Config name="ALLOWED_ABSOLUTE_PATHS" type="List[str]" default="[]">
+      <Description>允许的绝对路径白名单</Description>
+    </Config>
+  </Configuration>
+
+  <!-- ==================== 9. 异常定义 ==================== -->
+  <Exceptions>
+    <Exception name="InvalidSchemaError">
+      <Description>提供的JSON Schema格式不合法</Description>
+      <ErrorCode>400</ErrorCode>
+    </Exception>
+    <Exception name="FidelityCheckError">
+      <Description>参数保真校验失败（LLM篡改了用户输入）</Description>
+      <ErrorCode>400</ErrorCode>
+      <MessageTemplate>参数与用户原始输入不一致，字段：{field}，类型：{mismatch_type}</MessageTemplate>
+    </Exception>
+    <Exception name="PathTraversalError">
+      <Description>检测到目录遍历攻击</Description>
+      <ErrorCode>403</ErrorCode>
+    </Exception>
+  </Exceptions>
+
+  <!-- ==================== 10. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="PV-001">
+      <Name>基本Schema验证-通过</Name>
+      <Input>
+        <Params>{"code": "print('hello')"}</Params>
+        <Schema>{"type":"object","properties":{"code":{"type":"string"}},"required":["code"]}</Schema>
+      </Input>
+      <Expected>is_valid=true, sanitized_params包含code字段</Expected>
+    </TestCase>
+
+    <TestCase id="PV-002">
+      <Name>基本Schema验证-缺少必填字段</Name>
+      <Input>
+        <Params>{}</Params>
+        <Schema>{"type":"object","properties":{"code":{"type":"string"}},"required":["code"]}</Schema>
+      </Input>
+      <Expected>is_valid=false, errors包含missing_required错误</Expected>
+    </TestCase>
+
+    <TestCase id="PV-003">
+      <Name>路径安全校验-目录遍历</Name>
+      <Input>
+        <Params>{"path": "../../../etc/passwd"}</Params>
+        <Schema>{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}</Schema>
+      </Input>
+      <Expected>is_valid=false, errors包含path_traversal错误</Expected>
+    </TestCase>
+
+    <TestCase id="PV-004">
+      <Name>保真校验-路径篡改</Name>
+      <Input>
+        <Params>{"path": "/sandbox/other.txt"}</Params>
+        <RawPayload>{"path": "/sandbox/original.txt"}</RawPayload>
+      </Input>
+      <Expected>is_valid=false, fidelity_check.mismatches包含path_modified</Expected>
+    </TestCase>
+
+    <TestCase id="PV-005">
+      <Name>保真校验-允许沙盒前缀转换</Name>
+      <Input>
+        <Params>{"path": "/sandbox/test.txt"}</Params>
+        <RawPayload>{"path": "test.txt"}</RawPayload>
+      </Input>
+      <Expected>is_valid=true（沙盒前缀转换视为一致）</Expected>
+    </TestCase>
+
+    <TestCase id="PV-006">
+      <Name>参数清洗-去除空白和规范化</Name>
+      <Input>
+        <Params>{"path": "  /tmp/test.txt  ", "content": "  hello  "}</Params>
+      </Input>
+      <Expected>sanitized_params中path为"/tmp/test.txt"，content为"hello"</Expected>
+    </TestCase>
+
+    <TestCase id="PV-007">
+      <Name>自定义规则注册与执行</Name>
+      <Steps>
+        <Step>注册自定义规则：禁止path以".secret"结尾</Step>
+        <Step>验证path="/tmp/test.secret"</Step>
+      </Steps>
+      <Expected>is_valid=false, errors包含custom_rule错误</Expected>
+    </TestCase>
+  </Testing>
+
+  <!-- ==================== 11. 内部组件 ==================== -->
+  <InternalComponents>
+    <Component name="_SchemaValidator">
+      <Description>基于Python标准库的轻量级JSON Schema验证器。无需外部jsonschema依赖，覆盖V-SCHEMA-01~V-SCHEMA-08规则。</Description>
+      <Methods>
+        <Method>validate(value, schema, path) -> List[ValidationErrorDetail]</Method>
+        <Method>check_required(params, schema, path) -> List[ValidationErrorDetail]</Method>
+      </Methods>
+      <Note>作为外部jsonschema库的替代实现，用于减少项目依赖</Note>
+    </Component>
+    <Component name="_CompatValidationResult">
+      <Description>内部兼容类：validate_sandbox_path返回的旧格式结果对象，含valid/is_valid和errors属性。</Description>
+    </Component>
+  </InternalComponents>
+
+  <!-- ==================== 12. 实现提示 ==================== -->
+  <ImplementationNotes>
+    <Note>使用jsonschema库进行Schema验证，捕获ValidationError并转换为ValidationErrorDetail。实际实现中提供了基于Python标准库的_Sche maValidator作为替代方案。</Note>
+    <Note>路径校验使用pathlib.Path进行规范化，然后检查是否在沙盒根目录内</Note>
+    <Note>保真校验需要raw_user_payload从L1传递到L5，建议通过SessionContext.metadata传递</Note>
+    <Note>错误信息应使用中文，便于L3.ErrorTranslator处理</Note>
+    <Note>自定义规则存储在按工具名索引的字典中，支持动态增删</Note>
+    <Note>向后兼容方法（is_path_safe、validate_terminal_command、validate_sandbox_path）保留用于兼容早期版本的测试和调用方</Note>
+  </ImplementationNotes>
+
+</ComponentSpec>

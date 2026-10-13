@@ -1,0 +1,351 @@
+{
+  "request_id": "tc-14",
+  "start_time": "2026-04-21T18:20:19.317794",
+  "end_time": "2026-04-21T18:20:55.310204",
+  "status": "failed",
+  "error_message": "L5错误: 参数与用户原始输入不一致，请确认：search_web 工具未在当前规范工具执行规则中允许直接模拟外部联网请求，且该动作需要 web_access 权限但用户权限中缺失该权限。",
+  "final_response": null,
+  "layer_results": [
+    {
+      "layer_name": "L1",
+      "timestamp": "2026-04-21T18:20:19.317877",
+      "execution_time": 5.716733455657959,
+      "processing_log": [
+        "[1] 接收原始数据 - 渠道: telegram",
+        "[2] ProtocolAdapter解析数据",
+        "[3] DataValidator验证字段完整性",
+        "[4] EventNormalizer转换为StandardEvent",
+        "[5] 验证通过，返回结果"
+      ],
+      "component_trace": [
+        {
+          "component": "ProtocolAdapter",
+          "status": "success",
+          "reason": "已识别telegram渠道并完成协议适配。",
+          "output_summary": {
+            "channel": "telegram",
+            "mapped_fields": [
+              "user_id",
+              "content",
+              "timestamp",
+              "metadata"
+            ]
+          }
+        },
+        {
+          "component": "DataValidator",
+          "status": "success",
+          "reason": "字段完整性与格式校验通过，未触发安全截断或注入拦截。",
+          "output_summary": {
+            "validation": "passed",
+            "timestamp_check": "within_range"
+          }
+        },
+        {
+          "component": "EventNormalizer",
+          "status": "success",
+          "reason": "已将telegram原始数据标准化为StandardEvent。",
+          "output_summary": {
+            "standard_event_keys": [
+              "channel",
+              "user_id",
+              "content",
+              "timestamp",
+              "metadata"
+            ]
+          }
+        },
+        {
+          "component": "ErrorHandler",
+          "status": "skipped",
+          "reason": "本次处理未发生错误，无需重试或退避。",
+          "output_summary": {
+            "retry_count": 0
+          }
+        },
+        {
+          "component": "SessionManager",
+          "status": "skipped",
+          "reason": "当前输入未要求建立或复用会话映射。",
+          "output_summary": {
+            "session_action": "not_required"
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L2",
+      "timestamp": "2026-04-21T18:20:32.817328",
+      "execution_time": 5.920450687408447,
+      "processing_log": [
+        "[1] 限流检查: 用户test_user_001剩余59次请求",
+        "[2] 会话管理: 创建新会话 7d4d5f4c-9b0c-4f3e-9b8c-8a8d3a5f2f11",
+        "[3] 历史检索: 从 L4 获取0条历史记录",
+        "[4] 记忆检索: 从 L4 获取0条相关记忆",
+        "[5] 工具准备: 根据权限筛选出4个可用工具",
+        "[6] 上下文组装: 生成完整的L3输入"
+      ],
+      "component_trace": [
+        {
+          "component": "RateLimiter",
+          "status": "success",
+          "reason": "请求未超过用户/IP/全局限流阈值",
+          "output_summary": "user_remaining=59, ip_remaining=99, global_ok=true"
+        },
+        {
+          "component": "SessionManager",
+          "status": "success",
+          "reason": "已为用户生成并初始化会话",
+          "output_summary": "session_id=7d4d5f4c-9b0c-4f3e-9b8c-8a8d3a5f2f11, ttl=3600s"
+        },
+        {
+          "component": "HistoryRetriever",
+          "status": "success",
+          "reason": "从L4检索到历史记录结果",
+          "output_summary": "history_count=0"
+        },
+        {
+          "component": "ToolPreparer",
+          "status": "success",
+          "reason": "根据用户权限筛选可用工具完成",
+          "output_summary": "available_tools_count=4"
+        },
+        {
+          "component": "ContextAssembler",
+          "status": "success",
+          "reason": "已组装完整L3输入",
+          "output_summary": "session_context+tools+memories assembled"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L3",
+      "timestamp": "2026-04-21T18:20:38.741698",
+      "execution_time": 6.061432838439941,
+      "processing_log": [
+        "[1] 接收SessionContext",
+        "[2] SecurityGuard: 正常请求，非敏感/非恶意",
+        "[3] MemoryAccessor: 无相关记忆可增强",
+        "[4] TaskPlanner: 识别为信息检索任务",
+        "[5] LLMManager: 生成搜索决策",
+        "[6] ReActEngine: 决定调用工具",
+        "[7] ToolCaller: 发送search_web调用"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityGuard",
+          "status": "active",
+          "reason": "对当前请求进行安全分类，判定为正常请求。",
+          "output_summary": "未命中敏感/恶意/高危规则。"
+        },
+        {
+          "component": "MemoryAccessor",
+          "status": "success",
+          "reason": "检索相关记忆。",
+          "output_summary": "未找到可用相关记忆。"
+        },
+        {
+          "component": "TaskPlanner",
+          "status": "success",
+          "reason": "将请求规划为单步搜索任务。",
+          "output_summary": "需要搜索红烧肉做法并返回结果。"
+        },
+        {
+          "component": "LLMManager",
+          "status": "success",
+          "reason": "生成工具调用意图与思路。",
+          "output_summary": "选择search_web。"
+        },
+        {
+          "component": "ReActEngine",
+          "status": "active",
+          "reason": "进入ReAct第1轮决策。",
+          "output_summary": "决定先调用搜索工具。"
+        },
+        {
+          "component": "ToolCaller",
+          "status": "active",
+          "reason": "构造并发起搜索工具调用。",
+          "output_summary": "action=search_web, query=如何做红烧肉 做法"
+        },
+        {
+          "component": "ErrorTranslator",
+          "status": "skipped",
+          "reason": "当前未发生工具错误，无需转译。",
+          "output_summary": "未触发。"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L5",
+      "timestamp": "2026-04-21T18:20:44.805816",
+      "execution_time": 5.585476875305176,
+      "processing_log": [
+        "[1] 接收AgentAction",
+        "[2] ToolRegistry: 查找工具",
+        "[3] ParameterValidator: 验证参数",
+        "[4] PermissionManager: 权限检查失败",
+        "[5] ToolExecutor: 未执行",
+        "[6] ResultFormatter: 未执行",
+        "[7] 返回错误"
+      ],
+      "component_trace": [
+        {
+          "component": "ToolRegistry",
+          "status": "active",
+          "reason": "接收并查找 search_web 工具",
+          "output_summary": "工具已识别为 search_web"
+        },
+        {
+          "component": "ParameterValidator",
+          "status": "success",
+          "reason": "参数结构完整且字段类型正确",
+          "output_summary": "query 为有效字符串"
+        },
+        {
+          "component": "PermissionManager",
+          "status": "error",
+          "reason": "缺少 web_access 权限，无法执行 search_web",
+          "output_summary": "当前权限不包含 web_access"
+        },
+        {
+          "component": "ConfirmationManager",
+          "status": "skipped",
+          "reason": "非高危操作，无需二次确认"
+        },
+        {
+          "component": "BashAnalyzer",
+          "status": "skipped",
+          "reason": "当前工具不是 terminal"
+        },
+        {
+          "component": "ToolExecutor",
+          "status": "skipped",
+          "reason": "权限检查失败，未进入执行阶段"
+        },
+        {
+          "component": "ResultFormatter",
+          "status": "skipped",
+          "reason": "工具未执行，无结果可格式化"
+        }
+      ],
+      "error": null
+    },
+    {
+      "layer_name": "L6",
+      "timestamp": "2026-04-21T18:20:50.394481",
+      "execution_time": 4.911951780319214,
+      "processing_log": [
+        "[1] 输入验证: 检测到 operation=environment_prepare, action_type=search_web",
+        "[2] 接口路由: 该请求不匹配 run_code 代码执行规范",
+        "[3] 安全检查: 未进入代码执行流程",
+        "[4] SandboxManager: 未创建沙盒",
+        "[5] ResourceLimiter: 未设置资源限制",
+        "[6] CodeExecutor: 未执行",
+        "[7] ExecutionLogger: 记录拒绝原因",
+        "[8] 完成: 返回错误结果"
+      ],
+      "component_trace": [
+        {
+          "component": "SecurityEnforcer",
+          "status": "skipped",
+          "reason": "请求不是代码执行，未触发代码安全检查"
+        },
+        {
+          "component": "SandboxManager",
+          "status": "skipped",
+          "reason": "请求不是 run_code 调用，未创建沙盒环境"
+        },
+        {
+          "component": "ResourceLimiter",
+          "status": "skipped",
+          "reason": "未进入执行阶段，未设置资源限制"
+        },
+        {
+          "component": "CodeExecutor",
+          "status": "skipped",
+          "reason": "没有可执行代码输入，未执行代码"
+        },
+        {
+          "component": "DockerController",
+          "status": "skipped",
+          "reason": "未使用 Docker 模式，且未触发容器管理"
+        },
+        {
+          "component": "ExecutionLogger",
+          "status": "success",
+          "reason": "已记录本次请求的拒绝原因",
+          "output_summary": "UNSUPPORTED_OPERATION"
+        }
+      ],
+      "error": null
+    }
+  ],
+  "layer_transfers": [
+    {
+      "from_layer": "L1",
+      "to_layer": "L2",
+      "data_type": "StandardEvent",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "搜索一下如何做红烧肉",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "01dc44ca-ae04-4c3e-af9a-c8a9620bd3fe"
+          }
+        }
+      },
+      "timestamp": "2026-04-21T18:20:25.038623"
+    },
+    {
+      "from_layer": "L2",
+      "to_layer": "L3",
+      "data_type": "L3CompleteInput",
+      "data": {
+        "session_context": {
+          "session_id": "7d4d5f4c-9b0c-4f3e-9b8c-8a8d3a5f2f11",
+          "user_id": "test_user_001",
+          "current_query": "搜索一下如何做红烧肉",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      },
+      "timestamp": "2026-04-21T18:20:38.741409"
+    },
+    {
+      "from_layer": "L3",
+      "to_layer": "L5",
+      "data_type": "AgentAction",
+      "data": {
+        "agent_action": {
+          "action": "search_web",
+          "action_input": {
+            "query": "如何做红烧肉 做法"
+          },
+          "thought": "用户要搜索红烧肉做法，属于正常的网络搜索需求，需要调用搜索工具获取步骤并总结。"
+        }
+      },
+      "timestamp": "2026-04-21T18:20:44.805461"
+    }
+  ]
+}

@@ -1,0 +1,478 @@
+
+======================================================================
+  L2 WORKFLOW DEMO — CONTROL GATEWAY
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === L2 WORKFLOW DEMO — CONTROL GATEWAY ===
+17:55:56 [ INFO] L2Demo                    | Starting L2 step-by-step demonstration
+
+======================================================================
+  STEP 0: INPUT StandardEvent (from L1)
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 0: INPUT StandardEvent (from L1) ===
+
+>>> StandardEvent
+{
+  "channel": "telegram",
+  "user_id": "8448390784",
+  "content": "11",
+  "timestamp": 1777280372.0,
+  "metadata": {
+    "chat_id": 8448390784,
+    "message_id": 68,
+    "first_name": "lzmzm",
+    "username": null,
+    "update_id": 616877254,
+    "session_id": null,
+    "is_new_session_request": false
+  }
+}
+
+======================================================================
+  STEP 1: RATE LIMITER
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 1: RATE LIMITER ===
+17:55:56 [ INFO] L2Demo                    | Instantiating RateLimiter with default limits...
+
+>>> Default Limits
+    user   : (60, 60)
+    ip     : (100, 60)
+    global : (1000, 1)
+
+>>> Rate Limit Check
+    user_id : 8448390784
+    allowed : True
+    reason  : None
+
+======================================================================
+  STEP 2: CONTROL GATEWAY INITIALISATION
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 2: CONTROL GATEWAY INITIALISATION ===
+17:55:56 [ INFO] L2Demo                    | Instantiating ControlGateway...
+17:55:56 [ INFO] src.l4.core.l4_memory     | Initialized MemoryKnowledge with: embedding=MockEmbeddingService, vector_store=MemoryVectorStore, caching=True
+
+>>> ControlGateway Components
+    rate_limiter   : RateLimiter
+    memory         : MemoryKnowledge
+    tools          : ToolsCapabilities
+    l1_sender      : None
+    session_max_age: 3600s
+
+======================================================================
+  STEP 3: process_event() — COMPLETE L2 WORKFLOW
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 3: process_event() — COMPLETE L2 WORKFLOW ===
+17:55:56 [ INFO] L2Demo                    | Calling ControlGateway.process_event()...
+
+>>> process_event() completed in 0.0003s
+
+======================================================================
+  STEP 4: L3Input OUTPUT (L2 -> L3)
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 4: L3Input OUTPUT (L2 -> L3) ===
+17:55:56 [ INFO] L2Demo                    | Inspecting assembled L3Input...
+
+>>> 4x) 完整 L3Input（L2 拼接后输出给 L3 的整体上下文）
+
+>>> L3Input
+{
+  "session_context": {
+    "session_id": "53f3509b-830b-4aa8-917d-f2623cd7189c",
+    "user_id": "8448390784",
+    "current_query": "11",
+    "history": [],
+    "created_at": 1777283756.846488,
+    "metadata": {
+      "channel": "telegram",
+      "event_metadata": {
+        "chat_id": 8448390784,
+        "message_id": 68,
+        "first_name": "lzmzm",
+        "username": null,
+        "update_id": 616877254,
+        "session_id": null,
+        "is_new_session_request": false
+      }
+    },
+    "user_permissions": [
+      "file_read",
+      "file_write",
+      "execute_code",
+      "execute_command",
+      "web_access"
+    ]
+  },
+  "available_tools": [
+    {
+      "name": "python_repl",
+      "description": "Execute Python code in a sandboxed environment. Use this for calculations, data processing, or any Python programming task.",
+      "parameters": {
+        "code": {
+          "type": "string",
+          "description": "Python code to execute. Can include multiple lines and imports.",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "calculator",
+      "description": "Perform mathematical calculations. Supports basic arithmetic, scientific functions, and complex expressions.",
+      "parameters": {
+        "expression": {
+          "type": "string",
+          "description": "Mathematical expression to evaluate (e.g., '2+2', 'sqrt(16)', 'sin(pi/2)')",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "search_web",
+      "description": "Search the web for information. Returns search results from the internet.",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "Search query string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "file_read",
+      "description": "Read content from a file. Supports text files, code files, and documents.",
+      "parameters": {
+        "path": {
+          "type": "string",
+          "description": "Path to the file to read",
+          "required": true
+        },
+        "encoding": {
+          "type": "string",
+          "description": "File encoding (default: utf-8)",
+          "required": false
+        }
+      }
+    },
+    {
+      "name": "file_write",
+      "description": "Write content to a file. Creates the file if it doesn't exist.",
+      "parameters": {
+        "path": {
+          "type": "string",
+          "description": "Path to the file to write",
+          "required": true
+        },
+        "content": {
+          "type": "string",
+          "description": "Content to write to the file",
+          "required": true
+        },
+        "encoding": {
+          "type": "string",
+          "description": "File encoding (default: utf-8)",
+          "required": false
+        }
+      }
+    },
+    {
+      "name": "file_search",
+      "description": "Search for files matching a pattern in the documents directory.",
+      "parameters": {
+        "pattern": {
+          "type": "string",
+          "description": "Search pattern (e.g., '*.py', 'report*')",
+          "required": true
+        },
+        "path": {
+          "type": "string",
+          "description": "Directory to search in (default: documents/)",
+          "required": false
+        }
+      }
+    },
+    {
+      "name": "file_delete",
+      "description": "删除文件或目录。⚠️ 高危操作，需要二次确认。",
+      "parameters": {
+        "path": {
+          "type": "string",
+          "description": "要删除的文件或目录路径（必须以 documents/ 开头）",
+          "required": true
+        },
+        "confirmed": {
+          "type": "boolean",
+          "description": "是否已确认删除（首次调用不传或传 false）",
+          "required": false,
+          "default": false
+        },
+        "confirmation_id": {
+          "type": "string",
+          "description": "确认 ID（confirmed=true 时必填）",
+          "required": false
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "是否递归删除目录",
+          "required": false,
+          "default": false
+        }
+      }
+    },
+    {
+      "name": "terminal",
+      "description": "Execute terminal/shell commands. Use with caution - only safe commands are allowed.",
+      "parameters": {
+        "command": {
+          "type": "string",
+          "description": "Shell command to execute (e.g., 'ls -la', 'pwd')",
+          "required": true
+        },
+        "working_dir": {
+          "type": "string",
+          "description": "Working directory for the command (default: current directory)",
+          "required": false
+        }
+      }
+    }
+  ],
+  "relevant_memories": []
+}
+
+>>> 4a) SessionContext
+
+>>> SessionContext
+{
+  "session_id": "53f3509b-830b-4aa8-917d-f2623cd7189c",
+  "user_id": "8448390784",
+  "current_query": "11",
+  "history": [],
+  "created_at": 1777283756.846488,
+  "metadata": {
+    "channel": "telegram",
+    "event_metadata": {
+      "chat_id": 8448390784,
+      "message_id": 68,
+      "first_name": "lzmzm",
+      "username": null,
+      "update_id": 616877254,
+      "session_id": null,
+      "is_new_session_request": false
+    }
+  },
+  "user_permissions": [
+    "file_read",
+    "file_write",
+    "execute_code",
+    "execute_command",
+    "web_access"
+  ]
+}
+
+>>> 4b) Available Tools (filtered by permissions)
+    tool count: 8
+    [1] python_repl: Execute Python code in a sandboxed environment. Use this for calculations, data processing, or any Python programming task.
+    [2] calculator: Perform mathematical calculations. Supports basic arithmetic, scientific functions, and complex expressions.
+    [3] search_web: Search the web for information. Returns search results from the internet.
+    [4] file_read: Read content from a file. Supports text files, code files, and documents.
+    [5] file_write: Write content to a file. Creates the file if it doesn't exist.
+    [6] file_search: Search for files matching a pattern in the documents directory.
+    [7] file_delete: 删除文件或目录。⚠️ 高危操作，需要二次确认。
+    [8] terminal: Execute terminal/shell commands. Use with caution - only safe commands are allowed.
+
+>>> available_tools
+[
+  {
+    "name": "python_repl",
+    "description": "Execute Python code in a sandboxed environment. Use this for calculations, data processing, or any Python programming task.",
+    "parameters": {
+      "code": {
+        "type": "string",
+        "description": "Python code to execute. Can include multiple lines and imports.",
+        "required": true
+      }
+    }
+  },
+  {
+    "name": "calculator",
+    "description": "Perform mathematical calculations. Supports basic arithmetic, scientific functions, and complex expressions.",
+    "parameters": {
+      "expression": {
+        "type": "string",
+        "description": "Mathematical expression to evaluate (e.g., '2+2', 'sqrt(16)', 'sin(pi/2)')",
+        "required": true
+      }
+    }
+  },
+  {
+    "name": "search_web",
+    "description": "Search the web for information. Returns search results from the internet.",
+    "parameters": {
+      "query": {
+        "type": "string",
+        "description": "Search query string",
+        "required": true
+      }
+    }
+  },
+  {
+    "name": "file_read",
+    "description": "Read content from a file. Supports text files, code files, and documents.",
+    "parameters": {
+      "path": {
+        "type": "string",
+        "description": "Path to the file to read",
+        "required": true
+      },
+      "encoding": {
+        "type": "string",
+        "description": "File encoding (default: utf-8)",
+        "required": false
+      }
+    }
+  },
+  {
+    "name": "file_write",
+    "description": "Write content to a file. Creates the file if it doesn't exist.",
+    "parameters": {
+      "path": {
+        "type": "string",
+        "description": "Path to the file to write",
+        "required": true
+      },
+      "content": {
+        "type": "string",
+        "description": "Content to write to the file",
+        "required": true
+      },
+      "encoding": {
+        "type": "string",
+        "description": "File encoding (default: utf-8)",
+        "required": false
+      }
+    }
+  },
+  {
+    "name": "file_search",
+    "description": "Search for files matching a pattern in the documents directory.",
+    "parameters": {
+      "pattern": {
+        "type": "string",
+        "description": "Search pattern (e.g., '*.py', 'report*')",
+        "required": true
+      },
+      "path": {
+        "type": "string",
+        "description": "Directory to search in (default: documents/)",
+        "required": false
+      }
+    }
+  },
+  {
+    "name": "file_delete",
+    "description": "删除文件或目录。⚠️ 高危操作，需要二次确认。",
+    "parameters": {
+      "path": {
+        "type": "string",
+        "description": "要删除的文件或目录路径（必须以 documents/ 开头）",
+        "required": true
+      },
+      "confirmed": {
+        "type": "boolean",
+        "description": "是否已确认删除（首次调用不传或传 false）",
+        "required": false,
+        "default": false
+      },
+      "confirmation_id": {
+        "type": "string",
+        "description": "确认 ID（confirmed=true 时必填）",
+        "required": false
+      },
+      "recursive": {
+        "type": "boolean",
+        "description": "是否递归删除目录",
+        "required": false,
+        "default": false
+      }
+    }
+  },
+  {
+    "name": "terminal",
+    "description": "Execute terminal/shell commands. Use with caution - only safe commands are allowed.",
+    "parameters": {
+      "command": {
+        "type": "string",
+        "description": "Shell command to execute (e.g., 'ls -la', 'pwd')",
+        "required": true
+      },
+      "working_dir": {
+        "type": "string",
+        "description": "Working directory for the command (default: current directory)",
+        "required": false
+      }
+    }
+  }
+]
+
+>>> 4c) Relevant Memories (from L4)
+    memory count: 0
+
+>>> relevant_memories
+[]
+
+======================================================================
+  STEP 5: SESSION STATE
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 5: SESSION STATE ===
+17:55:56 [ INFO] L2Demo                    | Inspecting internal session store...
+
+>>> Active sessions in ControlGateway
+    total sessions: 1
+    session_id : 53f3509b-830b-4aa8-917d-f2623cd7189c
+    user_id    : 8448390784
+    created_at : 1777283756.8464644
+
+======================================================================
+  STEP 6: FOLLOW-UP REQUEST (session reuse)
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 6: FOLLOW-UP REQUEST (session reuse) ===
+17:55:56 [ INFO] L2Demo                    | Sending a second event to verify session reuse...
+
+>>> First  session_id : 53f3509b-830b-4aa8-917d-f2623cd7189c
+>>> Second session_id : 53f3509b-830b-4aa8-917d-f2623cd7189c
+>>> Session reused    : True
+
+======================================================================
+  STEP 7: NEW SESSION COMMAND (/new)
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 7: NEW SESSION COMMAND (/new) ===
+17:55:56 [ INFO] L2Demo                    | Sending /new to trigger session reset...
+
+>>> Old session_id : 53f3509b-830b-4aa8-917d-f2623cd7189c
+>>> New session_id : fa65f198-4086-40ac-b7a5-6d530b9fbfb1
+>>> Session changed: True
+
+======================================================================
+  STEP 8: SEND RESPONSE (L2 -> L1)
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === STEP 8: SEND RESPONSE (L2 -> L1) ===
+17:55:56 [ INFO] L2Demo                    | Demonstrating send_response()...
+[L2] 发送响应到用户 8448390784: 这是L3返回的最终答案...
+
+>>> send_response() returned: True
+
+======================================================================
+  MAIN DEMO COMPLETE
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === MAIN DEMO COMPLETE ===
+17:55:56 [ INFO] L2Demo                    | Log saved to: C:\Users\Lenovo\Desktop\vclaw\1.0.1\src\l2\tests\results\l2_demo_20260427_175556.log
+
+[Log file] C:\Users\Lenovo\Desktop\vclaw\1.0.1\src\l2\tests\results\l2_demo_20260427_175556.log
+
+======================================================================
+  BONUS: RATE LIMIT EXHAUSTION
+======================================================================
+17:55:56 [ INFO] L2Demo                    | === BONUS: RATE LIMIT EXHAUSTION ===
+17:55:56 [ INFO] L2Demo                    | Demonstrating rate limit exhaustion...
+    Request #1: ALLOWED
+    Request #2: ALLOWED
+    Request #3: ALLOWED
+    Request #4: BLOCKED (user_rate_limit)
+    Request #5: BLOCKED (user_rate_limit)

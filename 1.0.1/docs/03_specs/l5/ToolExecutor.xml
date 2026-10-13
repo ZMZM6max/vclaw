@@ -1,0 +1,681 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L5 Component: ToolExecutor
+  所属层: L5 - 能力抽象层 (Tools &amp; Capabilities)
+  创建时间: 2024
+  用途: 详细定义工具执行器组件的架构、接口、执行流程与L6委派机制
+-->
+<ComponentSpec id="L5-TOOL-EXECUTOR" name="ToolExecutor" layer="L5" version="1.0">
+
+  <!-- ==================== 1. 基本信息 ==================== -->
+  <Overview>
+    <Description>工具执行器，负责实际调用工具实现并管理执行生命周期。对代码/命令类工具（python_repl、terminal、javascript）委派至L6执行，对内部工具（file_read、search_web等）在L5层直接处理。ToolExecutor是L5层的执行核心，协调ParameterValidator、PermissionManager、ConfirmationManager完成完整执行链。</Description>
+    <Role>L5层执行引擎</Role>
+    <Responsibility>路由工具到正确执行器、管理执行超时、处理前置检查、协调L6委派</Responsibility>
+  </Overview>
+
+  <!-- ==================== 2. 核心职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">工具执行路由（内部执行 vs L6委派）</Item>
+    <Item priority="critical">执行超时控制（防止工具执行时间过长）</Item>
+    <Item priority="high">前置检查协调（存在性检查、权限检查、确认检查）</Item>
+    <Item priority="high">L6执行委派（对代码/命令类工具创建沙盒执行）</Item>
+    <Item priority="medium">执行异常捕获与包装</Item>
+    <Item priority="medium">执行结果初步处理（传递给ResultFormatter）</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 数据结构 ==================== -->
+  <DataStructures>
+    <Structure name="ExecutionResult">
+      <Description>工具执行结果（L5层内部使用，与L6的ExecutionResult不同但兼容）</Description>
+      <Fields>
+        <Field name="status" type="str" required="true">
+          <Description>执行状态</Description>
+          <ValidValues>success, error, pending_confirmation</ValidValues>
+        </Field>
+        <Field name="result" type="str" required="true">
+          <Description>执行结果的字符串表示</Description>
+          <Constraints>最大长度10000字符</Constraints>
+        </Field>
+        <Field name="execution_time" type="float" required="true">
+          <Description>实际执行耗时（秒）</Description>
+        </Field>
+        <Field name="metadata" type="dict" required="false" default="{}">
+          <Description>附加元数据</Description>
+          <Fields>
+            <Field name="tool_name" type="str">工具名称</Field>
+            <Field name="params" type="dict">实际使用的参数</Field>
+            <Field name="exit_code" type="int">退出码（代码执行工具）</Field>
+            <Field name="truncated" type="bool">结果是否被截断</Field>
+            <Field name="confirmation_id" type="str">二次确认ID（pending_confirmation状态时）</Field>
+          </Fields>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="ExecutionContext">
+      <Description>执行上下文，携带执行所需的全部信息</Description>
+      <Fields>
+        <Field name="tool" type="Tool" required="true">
+          <Description>工具定义对象</Description>
+        </Field>
+        <Field name="params" type="dict" required="true">
+          <Description>执行参数（已验证和清洗）</Description>
+        </Field>
+        <Field name="user_id" type="str" required="true">
+          <Description>发起执行的用户ID</Description>
+        </Field>
+        <Field name="session_id" type="str" required="true">
+          <Description>会话ID</Description>
+        </Field>
+        <Field name="timeout" type="int" required="false" default="30">
+          <Description>执行超时时间</Description>
+        </Field>
+        <Field name="raw_user_payload" type="Optional[dict]" required="false">
+          <Description>用户原始输入（用于保真校验）</Description>
+        </Field>
+      </Fields>
+    </Structure>
+
+    <Structure name="PreCheckResult">
+      <Description>前置检查结果</Description>
+      <Fields>
+        <Field name="passed" type="bool" required="true"/>
+        <Field name="checks" type="List[CheckDetail]" required="true"/>
+      </Fields>
+    </Structure>
+
+    <Structure name="CheckDetail">
+      <Description>单项检查详情</Description>
+      <Fields>
+        <Field name="check_name" type="str" required="true"/>
+        <Field name="passed" type="bool" required="true"/>
+        <Field name="message" type="Optional[str]" required="false"/>
+      </Fields>
+    </Structure>
+  </DataStructures>
+
+  <!-- ==================== 4. 接口定义 ==================== -->
+  <Interface>
+    <Method name="execute" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="tool" type="Tool" required="true">
+            <Description>工具定义对象（来自ToolRegistry）</Description>
+          </Parameter>
+          <Parameter name="params" type="dict" required="true">
+            <Description>工具参数（原始，未验证）</Description>
+          </Parameter>
+          <Parameter name="context" type="ExecutionContext" required="true">
+            <Description>执行上下文（含user_id、session_id等）</Description>
+          </Parameter>
+        </Input>
+        <Output type="ExecutionResult">
+          <Description>执行结果</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step order="1">从ToolRegistry获取工具定义（若tool为名称字符串）</Step>
+        <Step order="2">调用ParameterValidator.validate(params, tool.parameters, context.raw_user_payload)</Step>
+        <Step order="3" condition="验证失败">返回ExecutionResult(status="error", result=错误信息)</Step>
+        <Step order="4">调用PermissionManager.check_permission(context.user_id, tool.name)</Step>
+        <Step order="5" condition="权限不足">返回ExecutionResult(status="error", result="权限不足")</Step>
+        <Step order="6" condition="tool为terminal类型">调用BashAnalyzer.analyze(params["command"])分析风险</Step>
+        <Step order="7">调用ConfirmationManager.needs_confirmation(action, permissions)判断是否需要二次确认</Step>
+        <Step order="8" condition="需要确认">返回ExecutionResult(status="pending_confirmation", metadata包含confirmation_id)</Step>
+        <Step order="9" condition="tool.handler为L6_DELEGATE">路由至_execute_in_l6(context)</Step>
+        <Step order="10" condition="tool.handler为内部函数">路由至_execute_internal(tool, params, context)</Step>
+        <Step order="11">返回执行结果</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="ToolNotFoundError">
+          <Description>工具不存在</Description>
+          <ErrorCode>404</ErrorCode>
+        </Exception>
+        <Exception name="ExecutionTimeoutError">
+          <Description>工具执行超时</Description>
+          <ErrorCode>408</ErrorCode>
+        </Exception>
+        <Exception name="ExecutionError">
+          <Description>工具执行失败（运行时错误）</Description>
+          <ErrorCode>500</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="_execute_internal" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="tool" type="Tool" required="true"/>
+          <Parameter name="params" type="dict" required="true"/>
+          <Parameter name="context" type="ExecutionContext" required="true"/>
+        </Input>
+        <Output type="ExecutionResult"/>
+      </Signature>
+      <Description>执行内部工具（非L6委派）</Description>
+      <Behavior>
+        <Step>1. 记录执行开始时间</Step>
+        <Step>2. 调用tool.handler(params)（带超时控制）</Step>
+        <Step>3. 捕获handler返回值</Step>
+        <Step>4. 计算执行耗时</Step>
+        <Step>5. 包装为ExecutionResult返回</Step>
+      </Behavior>
+      <SupportedTools>
+        <Tool>file_read - 读取文件内容</Tool>
+        <Tool>file_write - 写入文件内容</Tool>
+        <Tool>file_delete - 删除文件</Tool>
+        <Tool>file_search - 模糊搜索文件</Tool>
+        <Tool>search_web - 网络搜索</Tool>
+        <Tool>calculator - 数学计算</Tool>
+      </SupportedTools>
+    </Method>
+
+    <Method name="_execute_in_l6" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="context" type="ExecutionContext" required="true"/>
+        </Input>
+        <Output type="ExecutionResult"/>
+      </Signature>
+      <Description>委派至L6执行（沙盒隔离）</Description>
+      <Behavior>
+        <Step>1. 根据工具类型确定language和code</Step>
+        <Step>2. 调用L6.SandboxManager.create(environment_id, config)创建隔离环境</Step>
+        <Step>3. 调用L6.SecurityEnforcer.validate(code)执行前安全检查</Step>
+        <Step>4. 调用L6.ResourceLimiter.set(cpu, memory, time, disk)设置资源配额</Step>
+        <Step>5. 调用L6.CodeExecutor.run()或L6.DockerController.exec_in_container()执行</Step>
+        <Step>6. 捕获L6返回的ExecutionResult（含exit_code、stdout、stderr、resource_usage）</Step>
+        <Step>7. 调用L6.SandboxManager.destroy(environment_id)销毁环境</Step>
+        <Step>8. 将L6结果转换为L5 ExecutionResult格式</Step>
+      </Behavior>
+      <CallChain>
+        <Step>ToolExecutor → L6.SandboxManager.create()</Step>
+        <Step>→ L6.ResourceLimiter.set()</Step>
+        <Step>→ L6.SecurityEnforcer.validate()</Step>
+        <Step>→ L6.CodeExecutor.run() / L6.DockerController.exec()</Step>
+        <Step>→ L6.SandboxManager.destroy()</Step>
+      </CallChain>
+      <ReturnMapping>
+        <Mapping l6_field="exit_code" l5_field="metadata.exit_code"/>
+        <Mapping l6_field="stdout" l5_field="result"/>
+        <Mapping l6_field="stderr" l5_field="metadata.stderr"/>
+        <Mapping l6_field="execution_time" l5_field="execution_time"/>
+        <Mapping l6_field="resource_usage" l5_field="metadata.resource_usage"/>
+      </ReturnMapping>
+    </Method>
+
+    <Method name="run_with_timeout" visibility="public">
+      <Signature>
+        <Input>
+          <Parameter name="func" type="Callable" required="true"/>
+          <Parameter name="args" type="tuple" required="false" default="()"/>
+          <Parameter name="kwargs" type="dict" required="false" default="{}">
+          </Parameter><Parameter name="timeout" type="int" required="false" default="30"/>
+        </Input>
+        <Output type="Any">
+          <Description>函数返回值</Description>
+        </Output>
+      </Signature>
+      <Description>带超时的函数执行包装器</Description>
+      <Behavior>
+        <Step>1. 使用asyncio.wait_for或threading.Timer实现超时</Step>
+        <Step>2. 超时后抛出ExecutionTimeoutError</Step>
+        <Step>3. 正常完成返回函数结果</Step>
+      </Behavior>
+    </Method>
+
+    <Method name="_execute_by_name" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="tool_name" type="str" required="true">
+            <Description>工具名称</Description>
+          </Parameter>
+          <Parameter name="params" type="dict" required="true">
+            <Description>工具参数</Description>
+          </Parameter>
+          <Parameter name="timeout" type="int" required="true">
+            <Description>执行超时时间</Description>
+          </Parameter>
+        </Input>
+        <Output type="ExecutionResult"/>
+      </Signature>
+      <Description>通过工具名执行内部handler映射。当tool.handler为None时，使用预定义的内部handler字典路由到对应处理函数。</Description>
+      <SupportedTools>
+        <Tool>file_read - 读取文件内容</Tool>
+        <Tool>file_write - 写入文件内容</Tool>
+        <Tool>file_delete - 删除文件或目录</Tool>
+        <Tool>file_search - 模糊搜索文件</Tool>
+        <Tool>search_web - 网络搜索（DuckDuckGo）</Tool>
+        <Tool>calculator - 数学计算（受限安全eval）</Tool>
+      </SupportedTools>
+    </Method>
+
+    <Method name="_handle_file_read" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>文件内容字符串</Description>
+        </Output>
+      </Signature>
+      <Description>内部handler：读取指定路径的文本文件内容</Description>
+      <Implementation>Python内置open()读取，编码utf-8</Implementation>
+    </Method>
+
+    <Method name="_handle_file_write" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>操作结果描述</Description>
+        </Output>
+      </Signature>
+      <Description>内部handler：将内容写入指定路径的文件</Description>
+      <Implementation>Python内置open()写入，编码utf-8</Implementation>
+    </Method>
+
+    <Method name="_handle_file_delete" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>操作结果描述</Description>
+        </Output>
+      </Signature>
+      <Description>内部handler：删除指定路径的文件或目录</Description>
+      <Implementation>os.remove（文件）或shutil.rmtree（目录）</Implementation>
+    </Method>
+
+    <Method name="_handle_file_search" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true"/>
+        </Input>
+        <Output type="List[str]">
+          <Description>匹配文件路径列表</Description>
+        </Output>
+      </Signature>
+      <Description>内部handler：根据关键词模糊搜索文件</Description>
+      <Implementation>os.walk遍历目录，关键字大小写不敏感匹配</Implementation>
+    </Method>
+
+    <Method name="_handle_search_web" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>搜索结果字符串</Description>
+        </Output>
+      </Signature>
+      <Description>内部handler：使用DuckDuckGo搜索网络信息</Description>
+      <Implementation>调用duckduckgo-search库（当前为模拟实现）</Implementation>
+    </Method>
+
+    <Method name="_handle_calculator" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="params" type="dict" required="true"/>
+        </Input>
+        <Output type="str">
+          <Description>计算结果字符串</Description>
+        </Output>
+      </Signature>
+      <Description>内部handler：安全地评估数学表达式</Description>
+      <Implementation>基于ast模块的受限eval，仅允许基本算术运算符</Implementation>
+    </Method>
+
+    <Method name="_safe_eval" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="expression" type="str" required="true">
+            <Description>数学表达式字符串</Description>
+          </Parameter>
+        </Input>
+        <Output type="Any">
+          <Description>计算结果（数字）</Description>
+        </Output>
+      </Signature>
+      <Description>安全地评估数学表达式。使用ast解析表达式树，仅允许白名单内的运算符（加减乘除、取模、幂运算、负号）。</Description>
+      <AllowedOperators>Add, Sub, Mult, Div, Pow, USub, FloorDiv, Mod</AllowedOperators>
+    </Method>
+
+    <Method name="_validate_params" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="tool" type="Tool" required="true"/>
+          <Parameter name="params" type="dict" required="true"/>
+          <Parameter name="context" type="ExecutionContext" required="true"/>
+        </Input>
+        <Output type="Union[dict, ExecutionResult]">
+          <Description>清洗后的参数，或验证失败时的错误ExecutionResult</Description>
+        </Output>
+      </Signature>
+      <Description>参数验证包装方法。调用ParameterValidator.validate进行JSON Schema、路径安全和保真校验。若验证失败，返回错误ExecutionResult。</Description>
+    </Method>
+
+    <Method name="_check_permission" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="tool" type="Tool" required="true"/>
+          <Parameter name="params" type="dict" required="true"/>
+          <Parameter name="context" type="ExecutionContext" required="true"/>
+        </Input>
+        <Output type="Optional[ExecutionResult]">
+          <Description>权限不足时的错误ExecutionResult，通过时返回None</Description>
+        </Output>
+      </Signature>
+      <Description>权限检查包装方法。调用PermissionManager.check_permission，若返回deny则包装为错误ExecutionResult。</Description>
+    </Method>
+
+    <Method name="_run_pre_checks" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="tool" type="Tool" required="true"/>
+          <Parameter name="params" type="dict" required="true"/>
+          <Parameter name="context" type="ExecutionContext" required="true"/>
+        </Input>
+        <Output type="PreCheckResult"/>
+      </Signature>
+      <Description>前置检查协调方法。执行路径沙盒检查和文件存在性检查，返回PreCheckResult。</Description>
+    </Method>
+
+    <Method name="_check_confirmation" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="tool" type="Tool" required="true"/>
+          <Parameter name="params" type="dict" required="true"/>
+          <Parameter name="context" type="ExecutionContext" required="true"/>
+          <Parameter name="bash_analysis" type="Optional[ClassificationResult]" required="false"/>
+        </Input>
+        <Output type="Optional[ExecutionResult]">
+          <Description>需要确认时返回pending_confirmation状态的ExecutionResult，否则返回None</Description>
+        </Output>
+      </Signature>
+      <Description>二次确认判断包装方法。调用ConfirmationManager.needs_confirmation和create_pending_confirmation，若需确认则返回挂起状态。</Description>
+    </Method>
+
+    <Method name="_resolve_timeout" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="tool" type="Tool" required="true"/>
+          <Parameter name="requested_timeout" type="Optional[int]" required="false"/>
+        </Input>
+        <Output type="int">
+          <Description>解析后的有效超时时间（秒）</Description>
+        </Output>
+      </Signature>
+      <Description>解析有效超时时间。根据工具类型查TOOL_TIMEOUT_OVERRIDES表，确保结果在[MIN_TIMEOUT, max]范围内。</Description>
+    </Method>
+
+    <Method name="_convert_l6_result" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="l6_result" type="ExecutionResult" required="true"/>
+          <Parameter name="execution_time" type="float" required="true"/>
+        </Input>
+        <Output type="L5ExecutionResult"/>
+      </Signature>
+      <Description>将L6返回的ExecutionResult转换为L5 ExecutionResult格式。根据exit_code判断status，截断超长结果。</Description>
+    </Method>
+
+    <Method name="_wrap_handler_result" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="result" type="Any" required="true"/>
+          <Parameter name="tool_name" type="str" required="true"/>
+          <Parameter name="execution_time" type="float" required="true"/>
+        </Input>
+        <Output type="L5ExecutionResult"/>
+      </Signature>
+      <Description>将内部handler的原始返回值包装为标准L5ExecutionResult。处理字符串截断和类型转换。</Description>
+    </Method>
+
+    <Method name="_error_result" visibility="private">
+      <Signature>
+        <Input>
+          <Parameter name="message" type="str" required="true"/>
+          <Parameter name="execution_time" type="float" required="true"/>
+          <Parameter name="error_type" type="str" required="false" default="execution_error"/>
+        </Input>
+        <Output type="L5ExecutionResult"/>
+      </Signature>
+      <Description>快速构造错误状态的L5ExecutionResult，统一错误输出格式。</Description>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 执行路由规则 ==================== -->
+  <ExecutionRouting>
+    <Rule id="R-001">
+      <Condition>tool.handler == "L6_DELEGATE"</Condition>
+      <Route>_execute_in_l6(context)</Route>
+      <Tools>python_repl, terminal, javascript</Tools>
+      <Reason>这些工具执行用户提供的代码/命令，必须在沙盒中隔离执行</Reason>
+    </Rule>
+
+    <Rule id="R-002">
+      <Condition>tool.handler为可调用函数（Callable）</Condition>
+      <Route>_execute_internal(tool, params, context)</Route>
+      <Tools>file_read, file_write, file_delete, file_search, search_web, calculator</Tools>
+      <Reason>这些工具为L5层内部实现，不涉及用户代码执行，可直接处理</Reason>
+    </Rule>
+
+    <Rule id="R-003">
+      <Condition>工具名称未注册</Condition>
+      <Route>抛出ToolNotFoundError</Route>
+    </Rule>
+  </ExecutionRouting>
+
+  <!-- ==================== 6. 前置检查 ==================== -->
+  <PreExecutionChecks>
+    <Check name="existence_check" applies_to="file_write">
+      <Description>写入文件前检查目标路径是否已存在</Description>
+      <Trigger>tool.name == "file_write"</Trigger>
+      <Implementation>os.path.exists(params["path"])</Implementation>
+      <OnConflict>路由到ConfirmationManager询问用户（覆盖/重命名/取消）</OnConflict>
+      <OnNotExists>直接执行写入</OnNotExists>
+    </Check>
+
+    <Check name="path_in_sandbox" applies_to="file_read,file_write,file_delete,file_search">
+      <Description>检查文件操作路径是否在沙盒范围内</Description>
+      <Implementation>路径规范化后检查是否以SANDBOX_ROOT开头</Implementation>
+      <OnFail>返回错误："文件路径超出允许范围"</OnFail>
+    </Check>
+
+    <Check name="bash_risk_analysis" applies_to="terminal">
+      <Description>终端命令风险分析</Description>
+      <Trigger>tool.name == "terminal"</Trigger>
+      <Implementation>调用BashAnalyzer.analyze(params["command"])</Implementation>
+      <OnHighRisk>路由到ConfirmationManager挂起确认</OnHighRisk>
+    </Check>
+  </PreExecutionChecks>
+
+  <!-- ==================== 7. 超时控制 ==================== -->
+  <TimeoutControl>
+    <DefaultTimeout>30秒</DefaultTimeout>
+    <MaxTimeout>300秒（5分钟）</MaxTimeout>
+    <MinTimeout>1秒</MinTimeout>
+    <PerToolOverrides>
+      <Tool name="python_repl" default="30" max="300"/>
+      <Tool name="terminal" default="30" max="300"/>
+      <Tool name="search_web" default="30" max="60"/>
+      <Tool name="file_read" default="10" max="30"/>
+      <Tool name="file_write" default="10" max="30"/>
+      <Tool name="file_delete" default="10" max="30"/>
+      <Tool name="calculator" default="5" max="10"/>
+      <Tool name="file_search" default="15" max="60"/>
+    </PerToolOverrides>
+    <TimeoutBehavior>
+      <Step>1. 发送终止信号（SIGTERM）到执行进程/容器</Step>
+      <Step>2. 等待5秒优雅退出</Step>
+      <Step>3. 若未退出，发送强制终止信号（SIGKILL）</Step>
+      <Step>4. 清理临时资源</Step>
+      <Step>5. 返回ExecutionResult(status="error", result="执行超时")</Step>
+    </TimeoutBehavior>
+  </TimeoutControl>
+
+  <!-- ==================== 8. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">接收AgentAction（来自L3，通过L2转发）</Step>
+    <Step order="2">ToolRegistry查找工具定义</Step>
+    <Step order="3">ParameterValidator验证参数</Step>
+    <Step order="4">PermissionManager检查用户权限</Step>
+    <Step order="5">BashAnalyzer分析命令风险等级（适用于terminal工具）</Step>
+    <Step order="6">ConfirmationManager判断是否需要二次确认</Step>
+    <Step order="7" condition="需要确认">返回pending_confirmation状态，等待用户响应</Step>
+    <Step order="8">ToolExecutor执行工具</Step>
+    <Step order="8.1" condition="L6_DELEGATE工具">ToolExecutor → L6.SandboxManager → L6.SecurityEnforcer + L6.ResourceLimiter → L6.CodeExecutor/L6.DockerController</Step>
+    <Step order="8.2" condition="内部工具">ToolExecutor直接调用handler</Step>
+    <Step order="9">ResultFormatter格式化结果</Step>
+    <Step order="10">返回Observation（给L3）</Step>
+  </DataFlow>
+
+  <!-- ==================== 9. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Consumer component="L5.ToolCaller">
+        <Usage>执行工具调用链的核心步骤</Usage>
+        <Interface>ToolExecutor.execute(tool, params, context)</Interface>
+      </Consumer>
+    </Upstream>
+
+    <Downstream>
+      <Dependency component="L5.ParameterValidator">
+        <Usage>执行前参数验证</Usage>
+        <Interface>ParameterValidator.validate(params, schema, raw_user_payload)</Interface>
+      </Dependency>
+      <Dependency component="L5.PermissionManager">
+        <Usage>执行前权限检查</Usage>
+        <Interface>PermissionManager.check_permission(user_id, tool_name)</Interface>
+      </Dependency>
+      <Dependency component="L5.ConfirmationManager">
+        <Usage>高危操作二次确认</Usage>
+        <Interface>ConfirmationManager.needs_confirmation(action, permissions)</Interface>
+      </Dependency>
+      <Dependency component="L5.BashAnalyzer">
+        <Usage>终端命令风险分析</Usage>
+        <Interface>BashAnalyzer.analyze(command)</Interface>
+      </Dependency>
+      <Dependency component="L5.ToolRegistry">
+        <Usage>获取工具定义</Usage>
+        <Interface>ToolRegistry.get(name)</Interface>
+      </Dependency>
+      <Dependency component="L6.RuntimeInterface">
+        <Usage>代码/命令类工具沙盒执行</Usage>
+        <Interface>L6.run_code(language, code, timeout) / L6.run_command(command, timeout)</Interface>
+        <Note>通过依赖注入获取RuntimeInterface实现</Note>
+      </Dependency>
+    </Downstream>
+  </Coupling>
+
+  <!-- ==================== 10. 配置项 ==================== -->
+  <Configuration>
+    <Config name="DEFAULT_TIMEOUT" type="int" default="30">
+      <Description>默认执行超时时间（秒）</Description>
+    </Config>
+    <Config name="MAX_TIMEOUT" type="int" default="300">
+      <Description>最大允许超时时间（秒）</Description>
+    </Config>
+    <Config name="TIMEOUT_GRACE_PERIOD" type="int" default="5">
+      <Description>超时后等待优雅退出的时间（秒）</Description>
+    </Config>
+    <Config name="ENABLE_L6_DELEGATION" type="bool" default="true">
+      <Description>是否启用L6委派（禁用则所有工具在L5直接执行，仅用于测试）</Description>
+    </Config>
+    <Config name="L6_FALLBACK_ON_ERROR" type="bool" default="false">
+      <Description>L6执行失败时是否回退到本地执行（不推荐生产环境使用）</Description>
+    </Config>
+  </Configuration>
+
+  <!-- ==================== 11. 异常定义 ==================== -->
+  <Exceptions>
+    <Exception name="ToolNotFoundError">
+      <Description>工具不存在</Description>
+      <ErrorCode>404</ErrorCode>
+      <Recovery>检查工具名称拼写，或联系管理员注册该工具</Recovery>
+    </Exception>
+    <Exception name="ExecutionTimeoutError">
+      <Description>工具执行超时</Description>
+      <ErrorCode>408</ErrorCode>
+      <Recovery>建议简化操作或增加timeout参数</Recovery>
+    </Exception>
+    <Exception name="ExecutionError">
+      <Description>工具执行失败（运行时错误）</Description>
+      <ErrorCode>500</ErrorCode>
+      <Note>包含原始异常信息，由ResultFormatter格式化后返回</Note>
+    </Exception>
+    <Exception name="PreCheckFailedError">
+      <Description>前置检查未通过</Description>
+      <ErrorCode>412</ErrorCode>
+    </Exception>
+  </Exceptions>
+
+  <!-- ==================== 12. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="TE-001">
+      <Name>内部工具执行-file_read</Name>
+      <Steps>
+        <Step>创建测试文件</Step>
+        <Step>调用ToolExecutor.execute(file_read_tool, {"path": "test.txt"}, context)</Step>
+      </Steps>
+      <Expected>返回ExecutionResult(status="success", result=文件内容)</Expected>
+    </TestCase>
+
+    <TestCase id="TE-002">
+      <Name>L6委派执行-python_repl</Name>
+      <Steps>
+        <Step>配置Mock L6 RuntimeInterface</Step>
+        <Step>调用ToolExecutor.execute(python_repl_tool, {"code": "print(1+1)"}, context)</Step>
+      </Steps>
+      <Expected>调用L6.run_code("python", "print(1+1)", 30)，返回ExecutionResult</Expected>
+    </TestCase>
+
+    <TestCase id="TE-003">
+      <Name>执行超时</Name>
+      <Steps>
+        <Step>调用ToolExecutor.execute(calculator_tool, {"expression": "1+1"}, context, timeout=1)</Step>
+        <Step>模拟耗时超过1秒</Step>
+      </Steps>
+      <Expected>抛出ExecutionTimeoutError</Expected>
+    </TestCase>
+
+    <TestCase id="TE-004">
+      <Name>工具不存在</Name>
+      <Steps>
+        <Step>调用ToolExecutor.execute("nonexistent", {}, context)</Step>
+      </Steps>
+      <Expected>抛出ToolNotFoundError</Expected>
+    </TestCase>
+
+    <TestCase id="TE-005">
+      <Name>前置检查-文件已存在</Name>
+      <Steps>
+        <Step>创建已存在的目标文件</Step>
+        <Step>调用ToolExecutor.execute(file_write_tool, {"path": "existing.txt", "content": "x"}, context)</Step>
+      </Steps>
+      <Expected>返回pending_confirmation状态或路由到ConfirmationManager</Expected>
+    </TestCase>
+
+    <TestCase id="TE-006">
+      <Name>L6执行结果转换</Name>
+      <Steps>
+        <Step>模拟L6返回ExecutionResult(exit_code=0, stdout="hello", stderr="")</Step>
+        <Step>调用_execute_in_l6</Step>
+      </Steps>
+      <Expected>L5 ExecutionResult.status="success", result="hello", metadata.exit_code=0</Expected>
+    </TestCase>
+  </Testing>
+
+  <!-- ==================== 13. 实现提示 ==================== -->
+  <ImplementationNotes>
+    <Note>ToolExecutor应持有RuntimeInterface的引用（依赖注入），而非直接实例化L6组件</Note>
+    <Note>内部工具handler建议为async函数，支持协程级并发</Note>
+    <Note>L6委派时，environment_id建议格式："{session_id}_{tool_name}_{timestamp}"</Note>
+    <Note>超时控制建议使用asyncio.wait_for（async环境）或concurrent.futures（sync环境）</Note>
+    <Note>所有异常应捕获并包装为ExecutionResult(status="error")，禁止裸异常上抛</Note>
+  </ImplementationNotes>
+
+</ComponentSpec>

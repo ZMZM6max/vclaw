@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L4 Component: IndexManager
+  拆分自: L4_MemoryKnowledge.xml
+  用途: 索引管理器，管理向量索引的生命周期
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L4_MemoryKnowledge.xml
+-->
+<Component id="L4.IndexManager" name="IndexManager" version="1.0">
+
+  <Description>索引管理器，管理向量索引的生命周期</Description>
+
+  <Operations>
+    <Operation name="create_index">
+      <Signature>create_index(name: str, dimension: int) -&gt; bool</Signature>
+      <Description>创建新索引</Description>
+      <Input>
+        <Parameter name="name" type="str" required="true">索引名称</Parameter>
+        <Parameter name="dimension" type="int" required="true">向量维度</Parameter>
+      </Input>
+    </Operation>
+
+    <Operation name="update_index">
+      <Signature>update_index(name: str, documents: List[Document]) -&gt; bool</Signature>
+      <Description>更新索引内容</Description>
+      <Input>
+        <Parameter name="name" type="str" required="true">索引名称</Parameter>
+        <Parameter name="documents" type="List[Dict]" required="true">文档列表</Parameter>
+      </Input>
+    </Operation>
+
+    <Operation name="delete_index">
+      <Signature>delete_index(name: str) -&gt; bool</Signature>
+      <Description>删除索引</Description>
+      <Input>
+        <Parameter name="name" type="str" required="true">索引名称</Parameter>
+      </Input>
+    </Operation>
+
+    <Operation name="list_indices">
+      <Signature>list_indices() -&gt; List[str]</Signature>
+      <Description>列出所有索引名称</Description>
+      <Output type="List[str]">索引名称列表</Output>
+    </Operation>
+
+    <Operation name="get_index_stats">
+      <Signature>get_index_stats(name: str) -&gt; Dict[str, Any]</Signature>
+      <Description>获取索引统计信息（文档数、维度等）</Description>
+      <Input>
+        <Parameter name="name" type="str" required="true">索引名称</Parameter>
+      </Input>
+      <Output type="Dict[str, Any]">
+        <Field name="document_count">文档数量</Field>
+        <Field name="dimension">向量维度</Field>
+        <Field name="index_type">索引类型</Field>
+      </Output>
+    </Operation>
+
+    <Operation name="optimize_index">
+      <Signature>optimize_index(name: str) -&gt; bool</Signature>
+      <Description>优化索引（如合并段、重建等）</Description>
+      <Input>
+        <Parameter name="name" type="str" required="true">索引名称</Parameter>
+      </Input>
+    </Operation>
+
+    <Operation name="index_exists">
+      <Signature>index_exists(name: str) -&gt; bool</Signature>
+      <Description>检查索引是否存在</Description>
+      <Input>
+        <Parameter name="name" type="str" required="true">索引名称</Parameter>
+      </Input>
+    </Operation>
+  </Operations>
+
+  <Implementations>
+    <Impl name="ChromaIndexManager">ChromaDB索引管理</Impl>
+    <Impl name="MemoryIndexManager">内存索引管理</Impl>
+  </Implementations>
+
+</Component>

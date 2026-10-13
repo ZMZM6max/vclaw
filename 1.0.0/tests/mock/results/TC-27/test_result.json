@@ -1,0 +1,14 @@
+{
+  "test_id": "TC-27",
+  "test_name": "任务随时取消机制",
+  "status": "failed",
+  "e2e_status": "completed",
+  "semantic_match": false,
+  "semantic_reason": "预期是确认已经立即停下并说明文件没动，而实际回复只是表示“先停下来”且未明确已完成。",
+  "final_response": "好的，我先停下来，不继续执行了。",
+  "execution_time": 20.834516048431396,
+  "layer_count": 3,
+  "error_message": null,
+  "output_dir": "E:\\pythonproject\\vclaw\\vclaw\\tests\\mock\\results\\TC-27",
+  "timestamp": "2026-04-21T18:26:50.159646"
+}

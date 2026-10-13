@@ -1,0 +1,37 @@
+{
+  "test_id": "TC-26",
+  "test_name": "长耗时任务的进度反馈",
+  "category": "UX体验",
+  "priority": "P0",
+  "user_input": "帮我把这两个加起来有2000页的PDF合并一下",
+  "precondition": "文件极大，合并至少需要30秒",
+  "react_flow": "Thought: 识别到耗时任务 -> Action: 先发送'正在处理'消息 -> 执行任务 -> 发送结果",
+  "expected_result": "系统: UI必须显示 Loading 状态或分步气泡。结果: 用户感知到进度，不重复发送指令",
+  "risk_level": "高 - Agent超过5秒无响应，用户以为死机重复发送指令",
+  "test_type": "UX",
+  "tags": [
+    "手工",
+    "必过"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "帮我把这两个加起来有2000页的PDF合并一下"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:25:46.155877"
+}

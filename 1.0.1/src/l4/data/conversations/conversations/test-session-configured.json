@@ -1,0 +1,15 @@
+{
+  "session_id": "test-session-configured",
+  "messages": [
+    {
+      "role": "user",
+      "content": "测试持久化"
+    },
+    {
+      "role": "assistant",
+      "content": "持久化测试成功！"
+    }
+  ],
+  "updated_at": 1777370935.105837,
+  "message_count": 2
+}

@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L1 Component: ProtocolAdapter
+  拆分自: L1_UserInteraction.xml
+  用途: 协议适配器基类及具体实现，负责将各渠道原始数据解析为 StandardEvent
+
+  架构级上下文（层目的、职责、耦合关系）参见:
+  docs/03_specs/L1_UserInteraction.xml
+  src/l1/docs/L1_UserInteraction.xml
+-->
+<Component id="L1.ProtocolAdapter" name="ProtocolAdapter" version="1.0">
+
+  <!-- ==================== 1. 结构说明 ==================== -->
+  <Structure>
+    <Purpose>协议适配器基类，定义统一适配接口。识别外部渠道特征，将原始数据解析为系统内部标准事件格式</Purpose>
+
+    <Responsibilities>
+      <Item priority="critical">识别自身能够处理的外部协议数据格式（can_handle）</Item>
+      <Item priority="critical">将原始数据解析并转换为 StandardEvent（parse）</Item>
+      <Item priority="high">返回渠道标识符，供上层路由使用（get_channel_name）</Item>
+      <Item priority="medium">在解析失败时抛出 ParseError，携带具体原因</Item>
+    </Responsibilities>
+
+    <Implementations>
+      <Impl name="TelegramAdapter">
+        <Description>处理 Telegram Bot API 推送的 Update 对象</Description>
+        <CanHandleRules>
+          <Rule>raw_data 包含 "update_id" 或 "message" 字段</Rule>
+        </CanHandleRules>
+        <ExtractedFields>
+          <Field source="message.from.id" target="user_id" type="str"/>
+          <Field source="message.text" target="content" type="str"/>
+          <Field source="message.date" target="timestamp" type="float"/>
+        </ExtractedFields>
+        <Metadata>
+          <Field name="chat_id">message.get("chat", {}).get("id")</Field>
+          <Field name="message_id">message.get("message_id")</Field>
+          <Field name="first_name">from_user.get("first_name")</Field>
+          <Field name="username">from_user.get("username")</Field>
+          <Field name="update_id">raw_data.get("update_id")</Field>
+        </Metadata>
+      </Impl>
+
+      <Impl name="WebSocketAdapter">
+        <Description>处理 WebSocket 客户端发送的 JSON 消息</Description>
+        <CanHandleRules>
+          <Rule>raw_data 包含 "type" 和 "user_id" 字段</Rule>
+        </CanHandleRules>
+        <ExtractedFields>
+          <Field source="user_id" target="user_id" type="str"/>
+          <Field source="content / message" target="content" type="str"/>
+          <Field source="timestamp" target="timestamp" type="float" default="time.time()"/>
+        </ExtractedFields>
+        <Metadata>
+          <Field name="type">raw_data.get("type", "message")</Field>
+          <Field name="connection_id">raw_data.get("connection_id")</Field>
+        </Metadata>
+      </Impl>
+
+      <Impl name="HttpWebhookAdapter">
+        <Description>处理 HTTP Webhook 回调请求，支持两种格式</Description>
+        <CanHandleRules>
+          <Rule>raw_data 包含 "headers" 或 "webhook_type" 或同时包含 "event" 与 "payload"</Rule>
+        </CanHandleRules>
+        <Formats>
+          <Format name="event_payload">
+            <Description>事件格式：{event, payload: {user_id, message, timestamp}}</Description>
+            <ExtractedFields>
+              <Field source="payload.user_id" target="user_id" type="str"/>
+              <Field source="payload.message" target="content" type="str"/>
+              <Field source="payload.timestamp" target="timestamp" type="float"/>
+            </ExtractedFields>
+            <Metadata>
+              <Field name="event">raw_data.get("event")</Field>
+              <Field name="raw_payload">raw_data.get("payload", {})</Field>
+            </Metadata>
+          </Format>
+          <Format name="simple">
+            <Description>简单格式：{user_id, content/body, timestamp, headers, webhook_type}</Description>
+            <ExtractedFields>
+              <Field source="user_id" target="user_id" type="str"/>
+              <Field source="content / body" target="content" type="str"/>
+              <Field source="timestamp" target="timestamp" type="float"/>
+            </ExtractedFields>
+            <Metadata>
+              <Field name="headers">raw_data.get("headers", {})</Field>
+              <Field name="webhook_type">raw_data.get("webhook_type")</Field>
+              <Field name="signature">raw_data.get("headers", {}).get("X-Signature")</Field>
+            </Metadata>
+          </Format>
+        </Formats>
+      </Impl>
+    </Implementations>
+
+    <DataFlow>
+      <Step order="1">接收原始数据（raw_data: dict）</Step>
+      <Step order="2">EventNormalizer 根据 channel 参数或调用 can_handle 自动选择适配器</Step>
+      <Step order="3">适配器执行 parse(raw_data)，提取字段并构造 StandardEvent</Step>
+      <Step order="4">返回 StandardEvent 给 EventNormalizer</Step>
+      <Step order="5" condition="解析失败">抛出 ParseError，携带失败原因</Step>
+    </DataFlow>
+  </Structure>
+
+  <!-- ==================== 2. 接口规范 ==================== -->
+  <Interface>
+    <PrimaryMethod name="parse">
+      <Signature>parse(raw_data: Dict) -&gt; StandardEvent</Signature>
+      <Description>将原始数据解析为 StandardEvent</Description>
+      <Input>
+        <Parameter name="raw_data" type="dict" required="true">
+          <Description>来自外部渠道的原始输入数据，格式取决于具体协议</Description>
+          <Example channel="telegram">
+            <![CDATA[
+            {
+              "update_id": 123456789,
+              "message": {
+                "message_id": 1,
+                "from": {"id": 12345, "first_name": "User"},
+                "chat": {"id": 12345, "type": "private"},
+                "date": 1234567890,
+                "text": "Hello bot"
+              }
+            }
+            ]]>
+          </Example>
+          <Example channel="websocket">
+            <![CDATA[
+            {
+              "type": "message",
+              "user_id": "user_123",
+              "content": "Hello",
+              "timestamp": 1234567890,
+              "connection_id": "ws-abc-001"
+            }
+            ]]>
+          </Example>
+        </Parameter>
+      </Input>
+      <Output type="StandardEvent">
+        <Description>标准化的内部事件对象</Description>
+      </Output>
+      <Exceptions>
+        <Exception name="ParseError">
+          <Description>数据无法解析或缺少必填字段</Description>
+          <ErrorCode>500</ErrorCode>
+        </Exception>
+      </Exceptions>
+    </PrimaryMethod>
+
+    <Method name="can_handle">
+      <Signature>can_handle(raw_data: Dict) -&gt; bool</Signature>
+      <Description>判断当前适配器是否能处理该原始数据</Description>
+      <Input>
+        <Parameter name="raw_data" type="dict" required="true">
+          <Description>原始输入数据</Description>
+        </Parameter>
+      </Input>
+      <Output type="bool">
+        <Description>True 表示可以处理</Description>
+      </Output>
+    </Method>
+
+    <Method name="get_channel_name">
+      <Signature>get_channel_name() -&gt; str</Signature>
+      <Description>返回当前适配器负责的渠道标识符</Description>
+      <Output type="str">
+        <ValidValues>telegram, websocket, webhook</ValidValues>
+      </Output>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 3. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Layer id="External">外部系统（Telegram API, WebSocket 客户端, HTTP Webhook 发送方）</Layer>
+      <Relation>接收原始数据输入</Relation>
+      <Protocol>HTTPS / WebSocket / HTTP</Protocol>
+    </Upstream>
+
+    <Downstream>
+      <Component id="L1.EventNormalizer">事件标准化器</Component>
+      <Relation>被调用方</Relation>
+      <DataFormat>StandardEvent 对象</DataFormat>
+    </Downstream>
+
+    <Dependencies>
+      <Internal>
+        <Dependency>models.StandardEvent - 标准化事件数据结构</Dependency>
+        <Dependency>core.exceptions.ParseError - 解析异常定义</Dependency>
+      </Internal>
+    </Dependencies>
+
+    <CouplingStrength>低耦合</CouplingStrength>
+    <CouplingType>数据耦合（仅通过 StandardEvent 与上层通信，不持有外部状态）</CouplingType>
+  </Coupling>
+
+</Component>

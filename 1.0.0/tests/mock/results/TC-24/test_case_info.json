@@ -1,0 +1,36 @@
+{
+  "test_id": "TC-24",
+  "test_name": "磁盘空间不足",
+  "category": "异常处理",
+  "priority": "P1",
+  "user_input": "帮我下载一份最新的中国地图全高清版",
+  "precondition": "剩余磁盘空间仅剩1MB",
+  "react_flow": "Thought: 联网下载大文件 -> Action: 执行写入时触发 Disk Full 异常",
+  "expected_result": "系统: 捕获异常，清理临时下载碎片。结果: 回复'糟糕，您的电脑硬盘好像装满了，塞不下这个大文件了，要不要先清理点东西？'",
+  "risk_level": "高 - 文件只下载一半损坏，且不释放空间",
+  "test_type": "异常",
+  "tags": [
+    "手工"
+  ],
+  "payload": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "帮我下载一份最新的中国地图全高清版"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "timestamp": "2026-04-21T18:24:45.570246"
+}

@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L6 Component: SandboxManager
+  所属层级: L6 RuntimeEnvironment
+  创建时间: 2026-04-23
+  用途: 详细定义沙盒管理器的架构、接口、实现、数据流与测试规范
+-->
+<Component id="L6.SandboxManager" name="SandboxManager" version="1.0">
+
+  <!-- ==================== 1. 概述 ==================== -->
+  <Overview>
+    <Purpose>沙盒管理器是L6层的核心协调组件，负责隔离执行环境的完整生命周期管理，包括创建、执行、销毁三个阶段。</Purpose>
+    <Role>系统的物理世界守门人，所有用户代码和命令的执行都必须经过SandboxManager创建的隔离环境。</Role>
+    <LayerPosition>L6最外层接口，直接被RuntimeEnvironment调用</LayerPosition>
+  </Overview>
+
+  <!-- ==================== 2. 职责 ==================== -->
+  <Responsibilities>
+    <Item priority="critical">隔离环境创建：为每次代码/命令执行创建独立的临时目录和容器环境</Item>
+    <Item priority="critical">环境销毁：执行完成后强制清理临时目录和容器，防止资源泄漏</Item>
+    <Item priority="high">执行协调：将代码写入临时文件，调用DockerController创建并执行容器</Item>
+    <Item priority="high">环境跟踪：维护environment_id到环境元数据（路径、容器ID）的映射</Item>
+    <Item priority="medium">多实现支持：支持DockerSandbox、ProcessSandbox、RestrictedPythonSandbox三种隔离级别</Item>
+    <Item priority="medium">跨平台兼容：使用tempfile.gettempdir()确保Windows/Linux/Mac兼容性</Item>
+  </Responsibilities>
+
+  <!-- ==================== 3. 实现列表 ==================== -->
+  <Implementations>
+    <Implementation name="DockerSandbox" default="true">
+      <Description>基于Docker容器的完全隔离环境，推荐用于生产环境</Description>
+      <IsolationLevel>强隔离（进程、文件系统、网络完全独立）</IsolationLevel>
+      <Technology>Docker Engine + Linux容器</Technology>
+      <Pros>
+        <Pro>完全进程隔离，恶意代码无法影响宿主机</Pro>
+        <Pro>支持cgroups资源限制（CPU、内存）</Pro>
+        <Pro>网络隔离（默认none模式）</Pro>
+        <Pro>只读根文件系统（read_only=True）</Pro>
+      </Pros>
+      <Cons>
+        <Con>需要Docker守护进程运行</Con>
+        <Con>容器启动有额外开销（数百毫秒）</Con>
+        <Con>Windows下需要Docker Desktop或WSL2</Con>
+      </Cons>
+      <FallbackOrder>1</FallbackOrder>
+    </Implementation>
+
+    <Implementation name="ProcessSandbox">
+      <Description>基于操作系统进程的轻量级隔离，适用于开发测试环境</Description>
+      <IsolationLevel>中等隔离（独立进程，共享文件系统）</IsolationLevel>
+      <Technology>Python subprocess + os.setsid（Linux）/ job object（Windows）</Technology>
+      <Pros>
+        <Pro>无需Docker，启动速度快</Pro>
+        <Pro>资源占用低</Pro>
+      </Pros>
+      <Cons>
+        <Con>文件系统未完全隔离</Con>
+        <Con>依赖操作系统进程管理能力</Con>
+        <Con>网络隔离需要额外配置</Con>
+      </Cons>
+      <FallbackOrder>2</FallbackOrder>
+    </Implementation>
+
+    <Implementation name="RestrictedPythonSandbox">
+      <Description>基于RestrictedPython解释器的语言级隔离，仅适用于Python代码</Description>
+      <IsolationLevel>弱隔离（同进程，语言级限制）</IsolationLevel>
+      <Technology>RestrictedPython库 + custom compile guards</Technology>
+      <Pros>
+        <Pro>启动速度最快（无需新进程）</Pro>
+        <Pro>细粒度的Python内置函数控制</Pro>
+      </Pros>
+      <Cons>
+        <Con>仅支持Python</Con>
+        <Con>无法防御CPU/内存耗尽攻击</Con>
+        <Con>共享进程空间，存在逃逸风险</Con>
+      </Cons>
+      <FallbackOrder>3</FallbackOrder>
+    </Implementation>
+  </Implementations>
+
+  <!-- ==================== 4. 接口规范 ==================== -->
+  <Interface>
+    <Method name="create">
+      <Signature>
+        <Input>
+          <Parameter name="environment_id" type="Optional[str]" required="false">
+            <Description>环境标识符。如果未提供，自动生成 env_{uuid8}</Description>
+            <Example>env_a1b2c3d4</Example>
+          </Parameter>
+          <Parameter name="config" type="SandboxConfig" required="false">
+            <Description>沙盒配置。如果未提供，使用默认配置</Description>
+          </Parameter>
+        </Input>
+        <Output type="str">
+          <Description>环境ID字符串，用于后续execute和destroy调用</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 若environment_id为空，生成UUID前8位作为ID</Step>
+        <Step>2. 在系统临时目录下创建 vclaw_sandbox/{environment_id}/ 目录</Step>
+        <Step>3. 将环境信息（path, container_id）存入内部字典 _environments</Step>
+        <Step>4. 返回environment_id</Step>
+      </Behavior>
+      <SideEffects>创建临时目录，分配内存中的跟踪字典条目</SideEffects>
+      <ThreadSafety>非线程安全。应在单线程中顺序调用，或通过外部锁保护</ThreadSafety>
+    </Method>
+
+    <Method name="execute">
+      <Signature>
+        <Input>
+          <Parameter name="environment_id" type="str" required="true">
+            <Description>由create()返回的环境ID</Description>
+          </Parameter>
+          <Parameter name="language" type="str" required="true">
+            <Description>编程语言</Description>
+            <ValidValues>python, javascript, bash</ValidValues>
+          </Parameter>
+          <Parameter name="code" type="str" required="true">
+            <Description>要执行的代码字符串</Description>
+            <Constraints>非空，最大长度100KB（由SecurityEnforcer前置校验）</Constraints>
+          </Parameter>
+          <Parameter name="timeout" type="Optional[int]" required="false" default="30">
+            <Description>执行超时时间（秒）</Description>
+            <Constraints>1 &lt;= timeout &lt;= 300</Constraints>
+          </Parameter>
+        </Input>
+        <Output type="ExecutionResult">
+          <Field name="exit_code" type="int">进程退出码，0表示成功</Field>
+          <Field name="stdout" type="str">标准输出内容，最大10000字符</Field>
+          <Field name="stderr" type="str">标准错误内容，最大10000字符</Field>
+          <Field name="execution_time" type="float">实际执行耗时（秒）</Field>
+          <Field name="resource_usage" type="dict">
+            <Field name="memory_peak_mb" type="float">内存峰值（MB）</Field>
+            <Field name="cpu_time_ms" type="float">CPU时间（毫秒）</Field>
+          </Field>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 从_environments查找environment_id对应的环境信息</Step>
+        <Step>2. 根据language选择文件扩展名（.py/.js/.sh）</Step>
+        <Step>3. 将code写入临时目录的script.{ext}文件</Step>
+        <Step>4. 调用DockerController.create_container()创建容器</Step>
+        <Step>5. 调用DockerController.exec_in_container()执行代码</Step>
+        <Step>6. 记录执行时间，组装ExecutionResult</Step>
+        <Step>7. 将容器ID保存到环境信息中</Step>
+      </Behavior>
+      <Exceptions>
+        <Exception name="ValueError">environment_id不存在于_environments中</Exception>
+        <Exception name="SandboxCreationError">Docker容器创建失败</Exception>
+        <Exception name="ExecutionTimeoutError">执行超过timeout限制</Exception>
+      </Exceptions>
+    </Method>
+
+    <Method name="destroy">
+      <Signature>
+        <Input>
+          <Parameter name="environment_id" type="str" required="true">
+            <Description>要销毁的环境ID</Description>
+          </Parameter>
+        </Input>
+        <Output type="bool">
+          <Description>true表示成功销毁，false表示环境ID不存在或清理失败</Description>
+        </Output>
+      </Signature>
+      <Behavior>
+        <Step>1. 从_environments查找环境信息</Step>
+        <Step>2. 如果存在容器ID，调用DockerController.remove_container(force=True)强制移除</Step>
+        <Step>3. 删除临时目录及其所有内容（shutil.rmtree）</Step>
+        <Step>4. 从_environments移除该条目</Step>
+        <Step>5. 返回true</Step>
+      </Behavior>
+      <ErrorHandling>任何清理步骤的失败都不应抛出异常，应返回false或静默处理，防止finally块中二次异常</ErrorHandling>
+      <Idempotency>对同一个environment_id多次调用destroy，第二次应返回false（已不存在）</Idempotency>
+    </Method>
+  </Interface>
+
+  <!-- ==================== 5. 数据流 ==================== -->
+  <DataFlow>
+    <Step order="1">RuntimeEnvironment.run_code() 调用 SandboxManager.create()</Step>
+    <Step order="2">SandboxManager 在系统临时目录创建子目录</Step>
+    <Step order="3">RuntimeEnvironment 调用 SandboxManager.execute(environment_id, language, code)</Step>
+    <Step order="4">SandboxManager 将 code 写入 script.{ext}</Step>
+    <Step order="5">SandboxManager 调用 DockerController.create_container() → 返回 container_id</Step>
+    <Step order="6">SandboxManager 调用 DockerController.exec_in_container() → 返回 (exit_code, stdout, stderr)</Step>
+    <Step order="7">SandboxManager 组装 ExecutionResult 返回给 RuntimeEnvironment</Step>
+    <Step order="8">RuntimeEnvironment 在 finally 块中调用 SandboxManager.destroy()</Step>
+    <Step order="9">SandboxManager 移除容器和临时目录</Step>
+  </DataFlow>
+
+  <!-- ==================== 6. 配置项 ==================== -->
+  <Configuration>
+    <ConfigItem name="base_dir">
+      <Description>沙盒根目录，所有临时环境在此目录下创建</Description>
+      <Default>{tempfile.gettempdir()}/vclaw_sandbox</Default>
+      <Example>/tmp/vclaw_sandbox (Linux) / C:\Users\xxx\AppData\Local\Temp\vclaw_sandbox (Windows)</Example>
+    </ConfigItem>
+    <ConfigItem name="auto_cleanup">
+      <Description>是否启用自动清理。为false时，临时文件保留用于调试</Description>
+      <Default>true</Default>
+    </ConfigItem>
+  </Configuration>
+
+  <!-- ==================== 7. 异常与错误处理 ==================== -->
+  <ErrorHandling>
+    <Scenario name="environment_not_found">
+      <Trigger>execute()或destroy()传入不存在的environment_id</Trigger>
+      <Action>execute()抛出ValueError；destroy()返回False</Action>
+    </Scenario>
+    <Scenario name="docker_daemon_not_running">
+      <Trigger>Docker守护进程未启动</Trigger>
+      <Action>DockerController._get_client()抛出SandboxCreationError，向上传播</Action>
+      <Fallback>未来可降级到ProcessSandbox</Fallback>
+    </Scenario>
+    <Scenario name="cleanup_failure">
+      <Trigger>容器或目录删除失败（如权限不足）</Trigger>
+      <Action>destroy()捕获异常，返回False，不中断上层流程</Action>
+    </Scenario>
+  </ErrorHandling>
+
+  <!-- ==================== 8. 耦合关系 ==================== -->
+  <Coupling>
+    <Upstream>
+      <Component>RuntimeEnvironment</Component>
+      <Relation>直接调用方。RuntimeEnvironment.run_code()和run_command()通过SandboxManager管理生命周期</Relation>
+    </Upstream>
+    <Downstream>
+      <Component>DockerController</Component>
+      <Relation>SandboxManager调用DockerController完成底层容器操作</Relation>
+    </Downstream>
+    <Dependencies>
+      <External>docker (Docker SDK for Python)</External>
+      <External>uuid (Python标准库)</External>
+      <External>tempfile (Python标准库)</External>
+      <External>shutil (Python标准库)</External>
+    </Dependencies>
+  </Coupling>
+
+  <!-- ==================== 9. 测试规范 ==================== -->
+  <Testing>
+    <TestCase id="SM_001">
+      <Name>创建和销毁环境</Name>
+      <Steps>
+        <Step>调用create()生成environment_id</Step>
+        <Step>验证临时目录存在</Step>
+        <Step>调用destroy()</Step>
+        <Step>验证临时目录已删除</Step>
+      </Steps>
+      <Expected>destroy返回true，目录不存在</Expected>
+    </TestCase>
+    <TestCase id="SM_002">
+      <Name>执行Python代码</Name>
+      <Steps>
+        <Step>create() → execute(language="python", code="print('hello')") → destroy()</Step>
+      </Steps>
+      <Expected>exit_code=0, stdout包含"hello"</Expected>
+    </TestCase>
+    <TestCase id="SM_003">
+      <Name>环境ID不存在时execute抛出异常</Name>
+      <Steps>
+        <Step>直接调用execute("nonexistent_id", ...)</Step>
+      </Steps>
+      <Expected>抛出ValueError</Expected>
+    </TestCase>
+    <TestCase id="SM_004">
+      <Name>重复destroy返回false</Name>
+      <Steps>
+        <Step>create() → destroy() → 再次destroy()</Step>
+      </Steps>
+      <Expected>第二次destroy返回false，不抛出异常</Expected>
+    </TestCase>
+    <TestCase id="SM_005">
+      <Name>超时处理</Name>
+      <Steps>
+        <Step>execute(timeout=1, code="while True: pass")</Step>
+      </Steps>
+      <Expected>抛出ExecutionTimeoutError（由底层传递）</Expected>
+    </TestCase>
+  </Testing>
+
+</Component>

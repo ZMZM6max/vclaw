@@ -1,0 +1,15 @@
+{
+  "session_id": "410f6028-508c-4caa-ab76-6b7671ed170c",
+  "messages": [
+    {
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "role": "assistant",
+      "content": "你好！有什么可以帮你的？"
+    }
+  ],
+  "updated_at": 1776239373.105124,
+  "message_count": 2
+}

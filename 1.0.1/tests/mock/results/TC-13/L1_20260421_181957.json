@@ -1,0 +1,83 @@
+{
+  "layer_name": "L1",
+  "timestamp": "2026-04-21T18:19:52.131754",
+  "execution_time": 5.0346291065216064,
+  "input_data": {
+    "channel": "telegram",
+    "raw_data": {
+      "update_id": 123456789,
+      "message": {
+        "message_id": 1,
+        "from": {
+          "id": "test_user_001",
+          "first_name": "TestUser"
+        },
+        "chat": {
+          "id": "test_user_001",
+          "type": "private"
+        },
+        "date": 1704067200,
+        "text": "查一下今天A股三大指数的收盘情况，存到文档里"
+      }
+    },
+    "client_ip": "192.168.1.1"
+  },
+  "output_data": {
+    "status": "success",
+    "standard_event": {
+      "channel": "telegram",
+      "user_id": "test_user_001",
+      "content": "查一下今天A股三大指数的收盘情况，存到文档里",
+      "timestamp": 1704067200.0,
+      "metadata": {
+        "source": "telegram",
+        "message_id": 1
+      }
+    },
+    "processing_log": [
+      "[1] 接收原始数据 - 渠道: telegram",
+      "[2] ProtocolAdapter解析数据",
+      "[3] DataValidator验证字段完整性",
+      "[4] EventNormalizer转换为StandardEvent",
+      "[5] 验证通过，返回结果"
+    ],
+    "component_trace": [
+      {
+        "component": "ProtocolAdapter",
+        "status": "success",
+        "reason": "已根据telegram渠道解析原始数据并提取标准字段",
+        "output_summary": "channel=telegram, user_id=test_user_001, content长度=23"
+      },
+      {
+        "component": "DataValidator",
+        "status": "success",
+        "reason": "字段完整性与时间戳有效性校验通过",
+        "output_summary": "user_id有效, content非空, timestamp=1704067200"
+      },
+      {
+        "component": "EventNormalizer",
+        "status": "success",
+        "reason": "已转换为StandardEvent结构",
+        "output_summary": "标准事件包含channel/user_id/content/timestamp/metadata"
+      },
+      {
+        "component": "ErrorHandler",
+        "status": "skipped",
+        "reason": "本次处理未发生错误，未触发重试机制"
+      },
+      {
+        "component": "SessionManager",
+        "status": "skipped",
+        "reason": "本次任务未要求会话映射创建或复用"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收原始数据 - 渠道: telegram",
+    "[2] ProtocolAdapter解析数据",
+    "[3] DataValidator验证字段完整性",
+    "[4] EventNormalizer转换为StandardEvent",
+    "[5] 验证通过，返回结果"
+  ],
+  "error": null
+}

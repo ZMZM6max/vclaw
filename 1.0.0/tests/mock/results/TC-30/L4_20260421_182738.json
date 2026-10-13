@@ -1,0 +1,82 @@
+{
+  "layer_name": "L4",
+  "timestamp": "2026-04-21T18:27:33.911703",
+  "execution_time": 4.733214855194092,
+  "input_data": {
+    "operation": "retrieve_and_search",
+    "session_id": "6ef8e9f7-8374-4a2f-868d-d46af50684f6",
+    "query": "先把桌面那个'数据'重命名为'今日数据'，然后把它压缩打包发给飞书助手",
+    "history_count": 0,
+    "search_count": 0,
+    "real_conversation_history": [],
+    "real_search_results": [],
+    "context": "L2 requested memory retrieval for L3 input assembly"
+  },
+  "output_data": {
+    "status": "success",
+    "operation": "retrieve_and_search",
+    "results": [],
+    "messages": [],
+    "query_embedding": null,
+    "cache_hit": false,
+    "processing_log": [
+      "[1] 接收请求: operation=retrieve_and_search",
+      "[2] CacheManager检查: 未命中（无可复用检索缓存）",
+      "[3] EmbeddingService: 未执行（当前输入未定义为标准search/store操作，且未触发向量查询）",
+      "[4] TextChunker: 未执行（非store操作）",
+      "[5] VectorStore: 未执行（当前请求未提供可执行的标准检索参数）",
+      "[6] MemoryStore: 检测到session_id=6ef8e9f7-8374-4a2f-868d-d46af50684f6，但未提供可检索的历史记录，返回空结果",
+      "[7] IndexManager: 未执行（非索引创建/删除操作）",
+      "[8] 完成: 返回空的检索/历史聚合结果"
+    ],
+    "component_trace": [
+      {
+        "component": "CacheManager",
+        "status": "success",
+        "reason": "已检查请求缓存，但未命中。",
+        "output_summary": "cache_hit=false"
+      },
+      {
+        "component": "EmbeddingService",
+        "status": "skipped",
+        "reason": "当前请求不是标准search操作，且未触发Embedding生成。",
+        "output_summary": "未生成query_embedding"
+      },
+      {
+        "component": "TextChunker",
+        "status": "skipped",
+        "reason": "当前请求不是store操作，不需要文本分块。",
+        "output_summary": "无"
+      },
+      {
+        "component": "VectorStore",
+        "status": "skipped",
+        "reason": "当前请求未进入标准向量检索流程。",
+        "output_summary": "无检索结果"
+      },
+      {
+        "component": "MemoryStore",
+        "status": "success",
+        "reason": "已识别session_id并尝试历史检索，但当前无可返回的历史消息。",
+        "output_summary": "messages_count=0"
+      },
+      {
+        "component": "IndexManager",
+        "status": "skipped",
+        "reason": "当前请求不是索引创建/删除操作。",
+        "output_summary": "无"
+      }
+    ]
+  },
+  "processing_log": [
+    "[1] 接收请求: operation=retrieve_and_search",
+    "[2] CacheManager检查: 未命中（无可复用检索缓存）",
+    "[3] EmbeddingService: 未执行（当前输入未定义为标准search/store操作，且未触发向量查询）",
+    "[4] TextChunker: 未执行（非store操作）",
+    "[5] VectorStore: 未执行（当前请求未提供可执行的标准检索参数）",
+    "[6] MemoryStore: 检测到session_id=6ef8e9f7-8374-4a2f-868d-d46af50684f6，但未提供可检索的历史记录，返回空结果",
+    "[7] IndexManager: 未执行（非索引创建/删除操作）",
+    "[8] 完成: 返回空的检索/历史聚合结果"
+  ],
+  "error": null
+}

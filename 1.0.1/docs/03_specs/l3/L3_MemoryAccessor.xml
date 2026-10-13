@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Component: MemoryAccessor
+  Layer: L3 (Orchestration)
+  创建时间: 2026-04-27
+  用途: 定义L3记忆访问器的详细规范
+  状态: 现有代码较完整
+-->
+<Component name="MemoryAccessor" layer="L3" version="1.0">
+
+  <Description>
+    记忆访问器，负责从L4（记忆与知识层）检索相关知识、对话历史和用户偏好。
+    为ReActEngine提供增强的上下文信息，帮助LLM做出更准确的决策。
+    通过MemoryInterface与L4解耦。
+  </Description>
+
+  <Responsibilities>
+    <Item priority="critical">从L4检索与当前查询相关的知识片段</Item>
+    <Item priority="high">获取会话历史并生成摘要</Item>
+    <Item priority="high">格式化检索结果为LLM可消费的文本</Item>
+    <Item priority="medium">提取相关历史查询用于上下文增强</Item>
+  </Responsibilities>
+
+  <RetrievalFlow>
+    <Step order="1">接收query和session_id</Step>
+    <Step order="2">调用L4.search(query, top_k) 检索知识库</Step>
+    <Step order="3">调用L4.retrieve_history(session_id, limit) 获取对话历史</Step>
+    <Step order="4">汇总结果并格式化</Step>
+  </RetrievalFlow>
+
+  <Methods>
+    <Method name="retrieve_for_query">
+      <Signature>
+        <Input>
+          <Parameter name="query" type="str" required="true">用户查询文本</Parameter>
+          <Parameter name="session_id" type="str" required="true">会话ID</Parameter>
+          <Parameter name="top_k" type="int" required="false" default="3">知识检索返回数量</Parameter>
+          <Parameter name="include_history" type="bool" required="false" default="true">是否包含对话历史</Parameter>
+        </Input>
+        <Output type="Dict[str, Any]">
+          <Field name="knowledge" type="List[str]">相关知识片段</Field>
+          <Field name="history_summary" type="str">对话历史摘要</Field>
+          <Field name="related_queries" type="List[str]">相关历史查询</Field>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 调用self.memory.search(query, top_k=top_k) 检索知识</Step>
+        <Step>2. 若include_history为True，调用self.memory.retrieve_history(session_id, limit=10)</Step>
+        <Step>3. 从history中提取用户消息作为related_queries</Step>
+        <Step>4. 生成history_summary</Step>
+        <Step>5. 返回结构化字典</Step>
+        <ErrorHandling>任何异常静默处理，返回空结果，不阻断主流程</ErrorHandling>
+      </Implementation>
+    </Method>
+
+    <Method name="format_context">
+      <Signature>
+        <Input>
+          <Parameter name="retrieval_result" type="Dict[str, Any]" required="true">retrieve_for_query的返回结果</Parameter>
+        </Input>
+        <Output type="str">
+          <Description>格式化后的上下文文本，供LLM消费</Description>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 若存在knowledge，添加"Relevant knowledge:"前缀并列出</Step>
+        <Step>2. 若存在history_summary，添加"Conversation:"前缀</Step>
+        <Step>3. 若存在related_queries，添加"Related previous queries:"前缀并列出</Step>
+        <Step>4. 若无任何内容，返回空字符串</Step>
+      </Implementation>
+    </Method>
+  </Methods>
+
+  <ContextFormat>
+    <KnowledgeFormat>
+      <![CDATA[
+Relevant knowledge:
+  [1] {knowledge_item_1}
+  [2] {knowledge_item_2}
+      ]]>
+    </KnowledgeFormat>
+    <HistoryFormat>
+      <![CDATA[
+Conversation: Recent conversation has {count} messages
+      ]]>
+    </HistoryFormat>
+    <RelatedQueriesFormat>
+      <![CDATA[
+Related previous queries:
+  - {query_1}
+  - {query_2}
+      ]]>
+    </RelatedQueriesFormat>
+  </ContextFormat>
+
+  <Integration>
+    <Upstream>
+      <From>L3.Orchestration._run_react_loop()</From>
+      <Data>query, session_id</Data>
+    </Upstream>
+    <Downstream>
+      <To>L4.MemoryKnowledge</To>
+      <Data>search(), retrieve_history()</Data>
+      <Interface>MemoryInterface</Interface>
+      <Note>通过依赖注入，禁止直接实例化L4</Note>
+    </Downstream>
+    <ReturnPath>
+      <To>L3.ReActEngine.generate_thought()</To>
+      <Data>knowledge（作为参数传入）</Data>
+    </ReturnPath>
+  </Integration>
+
+  <Testing>
+    <TestCases>
+      <Case id="TC-MA-001">retrieve_for_query() 返回知识片段</Case>
+      <Case id="TC-MA-002">retrieve_for_query() 返回对话历史摘要</Case>
+      <Case id="TC-MA-003">format_context() 正确格式化知识列表</Case>
+      <Case id="TC-MA-004">L4异常时静默处理，返回空结果</Case>
+    </TestCases>
+  </Testing>
+
+  <ImplementationNotes>
+    <Note>现有代码位于 src/l3/l3_orchestration.py MemoryAccessor 类</Note>
+    <Note>当前状态：retrieve_for_query() 和 format_context() 均已实现</Note>
+    <Note>当前状态：L4异常时静默处理，不阻断主流程</Note>
+    <Note>当前状态：默认检索top_k=3，历史limit=10</Note>
+  </ImplementationNotes>
+
+</Component>

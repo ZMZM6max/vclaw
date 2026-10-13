@@ -1,0 +1,464 @@
+# L3 任务规划器测试结果
+
+## TC-L3-005: 创建简单任务计划
+**输入**: "计算斐波那契数列前10项"
+
+**LLM 返回** (JSON字符串):
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认斐波那契数列定义：前10项的计算，通常从1, 1开始，每个数为前两个之和",
+    "input": {"request": "计算斐波那契数列前10项"},
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "根据定义和递推关系计算斐波那契数列前10项",
+    "input": {"definition": "F1=1, F2=1, Fn=F(n-1)+F(n-2)"},
+    "depends_on": [1]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "返回计算结果前10项列表",
+    "input": {"sequence_length": 10},
+    "depends_on": [2]
+  }
+]
+```
+
+**组件输出** (Python列表):
+```python
+[
+  {'step': 1, 'action': 'llm', 'description': '确认斐波那契数列定义...', 'input': {...}, 'depends_on': []},
+  {'step': 2, 'action': 'llm', 'description': '根据定义和递推关系计算...', 'input': {...}, 'depends_on': [1]},
+  {'step': 3, 'action': 'llm', 'description': '返回计算结果前10项列表', 'input': {...}, 'depends_on': [2]}
+]
+```
+
+**转换说明**: JSON字符串 → Python列表 (json.loads解析)
+
+状态: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**输入**: "1+1等于几"
+
+**LLM 返回** (JSON字符串):
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "Interpret the arithmetic expression 1+1 and determine its value.",
+    "input": {"expression": "1+1"},
+    "depends_on": []
+  }
+]
+```
+
+**组件输出** (Python列表):
+```python
+[
+  {'step': 1, 'action': 'llm', 'description': 'Interpret the arithmetic expression...', 'input': {...}, 'depends_on': []}
+]
+```
+
+**转换说明**: JSON字符串 → Python列表
+
+状态: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**输入**: "在桌面创建一个hello.txt文件"
+
+**LLM 返回** (JSON字符串):
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求：在桌面创建一个名为hello.txt的文件",
+    "input": {"request": "在桌面创建一个hello.txt文件"},
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "准备文件内容（询问用户或创建空文件）",
+    "input": {"filename": "hello.txt", "location": "desktop"},
+    "depends_on": [1]
+  }
+]
+```
+
+**组件输出** (Python列表):
+```python
+[
+  {'step': 1, 'action': 'llm', 'description': '确认用户需求...', 'input': {...}, 'depends_on': []},
+  {'step': 2, 'action': 'llm', 'description': '准备文件内容...', 'input': {...}, 'depends_on': [1]}
+]
+```
+
+**转换说明**: JSON字符串 → Python列表
+
+状态: ✅ 通过
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-13 21:51:59
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确定斐波那契数列前10项的定义与起始项（通常为1, 1 或 0, 1），并选择一种约定用于计算。",
+    "input": {
+      "task": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "根据选定的定义，逐项推导出前10项斐波那契数列。",
+    "input": {
+      "definition": "采用常见定义：F1=1, F2=1, F(n)=F(n-1)+F(n-2)"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "整理并输出斐波那契数列前10项结果。",
+    "input": {
+      "format": "list"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-13 21:52:02
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户的问题是要求计算 1+1 的结果。",
+    "input": {
+      "question": "1+1等于几"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "根据基础算术得出 1+1=2。",
+    "input": {
+      "expression": "1+1"
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-13 21:52:08
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户意图是在桌面创建名为 hello.txt 的空文件，并推断需要在目标系统的桌面路径下执行创建操作。",
+    "input": {
+      "task": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "根据运行环境确定桌面目录的具体路径表示方式，并准备创建文件所需的目标文件名与路径。",
+    "input": {
+      "filename": "hello.txt",
+      "target_location": "Desktop"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "tool_name",
+    "description": "使用文件创建工具在桌面路径下创建 hello.txt 文件。",
+    "input": {
+      "path": "Desktop/hello.txt",
+      "content": ""
+    },
+    "depends_on": [
+      2
+    ]
+  },
+  {
+    "step": 4,
+    "action": "llm",
+    "description": "验证文件已成功创建，并向用户确认结果。",
+    "input": {
+      "expected_result": "Desktop/hello.txt exists"
+    },
+    "depends_on": [
+      3
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-14 19:47:40
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户需求：计算斐波那契数列前10项，并确定数列从第1项开始的定义方式。",
+    "input": {
+      "request": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "根据斐波那契数列定义生成前10项结果。",
+    "input": {
+      "definition": "前两项通常为1, 1，之后每项等于前两项之和"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "整理并输出前10项的最终答案。",
+    "input": {
+      "result_format": "list"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-14 19:47:45
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户问题“1+1等于几”，并直接进行基础算术推理得出结果。",
+    "input": {
+      "question": "1+1等于几"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-14 19:47:48
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求是要在桌面创建一个名为 hello.txt 的空文本文件，并确定目标位置为当前用户桌面。",
+    "input": {
+      "request": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_create_file",
+    "description": "在桌面路径下创建 hello.txt 文件。",
+    "input": {
+      "path": "~/Desktop/hello.txt",
+      "content": ""
+    },
+    "depends_on": [
+      1
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 简单任务计划
+**时间**: 2026-04-15 16:43:30
+**查询**: "计算斐波那契数列前10项"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认斐波那契数列的定义，并确定前10项从第1项开始计算。",
+    "input": {
+      "task": "计算斐波那契数列前10项"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "llm",
+    "description": "逐项推导并生成斐波那契数列前10项的数值。",
+    "input": {
+      "method": "递推计算"
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "整理结果并输出为最终答案。",
+    "input": {
+      "format": "前10项列表"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 数学计算任务规划
+**时间**: 2026-04-15 16:43:38
+**查询**: "1+1等于几"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "理解用户问题“1+1等于几”，并直接进行基础算术推理得出结果。",
+    "input": {
+      "question": "1+1等于几"
+    },
+    "depends_on": []
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---
+
+## TC-L3-005: 文件操作任务规划
+**时间**: 2026-04-15 16:43:47
+**查询**: "在桌面创建一个hello.txt文件"
+
+**生成计划**:
+```json
+[
+  {
+    "step": 1,
+    "action": "llm",
+    "description": "确认用户需求是在桌面创建一个名为 hello.txt 的文件，并确定这是一个简单的本地文件创建任务。",
+    "input": {
+      "request": "在桌面创建一个hello.txt文件"
+    },
+    "depends_on": []
+  },
+  {
+    "step": 2,
+    "action": "tool_name",
+    "description": "调用文件创建工具，在桌面路径下创建 hello.txt 文件。",
+    "input": {
+      "path": "~/Desktop/hello.txt",
+      "content": ""
+    },
+    "depends_on": [
+      1
+    ]
+  },
+  {
+    "step": 3,
+    "action": "llm",
+    "description": "确认文件已创建并向用户返回结果。",
+    "input": {
+      "path": "~/Desktop/hello.txt"
+    },
+    "depends_on": [
+      2
+    ]
+  }
+]
+```
+
+**状态**: ✅ 通过
+
+---

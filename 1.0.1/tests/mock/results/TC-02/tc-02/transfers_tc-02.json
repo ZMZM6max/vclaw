@@ -1,0 +1,75 @@
+{
+  "request_id": "tc-02",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:14:54.711306",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "帮我看看D盘那个《Q3财报.pdf》里面重点说了啥？",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "ce406707-31e3-48d9-a54a-73ae8f632468"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:15:05.260815",
+      "data": {
+        "session_context": {
+          "session_id": "ce406707-31e3-48d9-a54a-73ae8f632468",
+          "user_id": "test_user_001",
+          "current_query": "帮我看看D盘那个《Q3财报.pdf》里面重点说了啥？",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59,
+            "source": "telegram",
+            "message_id": 1
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L5",
+      "type": "AgentAction",
+      "timestamp": "2026-04-21T18:15:11.168025",
+      "data": {
+        "agent_action": {
+          "action": "file_read",
+          "action_input": {
+            "path": "documents/D:/Q3财报.pdf"
+          },
+          "thought": "用户要查看D盘中的《Q3财报.pdf》并总结重点，属于文件读取与内容分析任务。根据规则应先调用文件读取工具获取文件内容，再进行总结。",
+          "_path_sanitized": true,
+          "_original_path": "D:/Q3财报.pdf"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Component: ToolCaller
+  Layer: L3 (Orchestration)
+  创建时间: 2026-04-27
+  用途: 定义L3工具调用器的详细规范
+  状态: 现有代码为骨架，需补全完整实现
+-->
+<Component name="ToolCaller" layer="L3" version="1.0">
+
+  <Description>
+    工具调用器，与L5交互执行工具。负责按顺序调用L5内部组件完成工具执行。
+    在L3中，ToolCaller的职责是：接收AgentAction，委托L5执行，接收Observation返回。
+    注意：L5内部的ToolRegistry、ParameterValidator、PermissionManager、ConfirmationManager、ToolExecutor等组件由L5统一管理，ToolCaller通过L5统一接口调用。
+  </Description>
+
+  <Responsibilities>
+    <Item priority="critical">接收AgentAction并委托L5执行</Item>
+    <Item priority="critical">将L5返回的ExecutionResult封装为Observation返回给ReActEngine</Item>
+    <Item priority="high">格式化工具列表供LLM使用（OpenAI函数格式）</Item>
+    <Item priority="medium">处理工具执行链的异常，转换为标准化Observation</Item>
+  </Responsibilities>
+
+  <ExecutionChain>
+    <Note>以下执行链由L5内部隐式管理，ToolCaller通过L5统一接口调用</Note>
+    <Step order="1">ToolRegistry.get(name) 查找工具定义</Step>
+    <Step order="2">ParameterValidator.validate(params, schema) 验证参数合法性</Step>
+    <Step order="3">PermissionManager.check_permission(user_id, tool_name) 检查用户权限</Step>
+    <Step order="4">ConfirmationManager.needs_confirmation(action, permissions) 判断是否需要二次确认</Step>
+    <Step order="5">ToolExecutor.execute(tool, params) 执行工具（如为代码/命令类型则委派至L6）</Step>
+    <Step order="6">ResultFormatter.format(result) 格式化执行结果</Step>
+  </ExecutionChain>
+
+  <ObservationSchema>
+    <Field name="status" type="str" required="true">
+      <Description>执行状态</Description>
+      <ValidValues>success, error, confirmation_required</ValidValues>
+    </Field>
+    <Field name="result" type="str" required="true">
+      <Description>执行结果（最多10000字符）</Description>
+    </Field>
+    <Field name="execution_time" type="float" required="true">
+      <Description>执行时间（秒）</Description>
+    </Field>
+    <Field name="metadata" type="dict" required="false">
+      <Description>额外元数据</Description>
+      <Fields>
+        <Field name="tool_name">工具名称</Field>
+        <Field name="params">实际使用的参数</Field>
+        <Field name="exit_code">退出码（代码执行工具）</Field>
+        <Field name="truncated">结果是否被截断</Field>
+        <Field name="error_type">错误类型（status=error时）</Field>
+      </Fields>
+    </Field>
+  </ObservationSchema>
+
+  <Methods>
+    <Method name="call_tool">
+      <Signature>
+        <Input>
+          <Parameter name="action" type="AgentAction" required="true">
+            <Description>包含工具名称和参数的AgentAction</Description>
+          </Parameter>
+          <Parameter name="user_permissions" type="List[str]" required="false">
+            <Description>用户权限列表</Description>
+          </Parameter>
+        </Input>
+        <Output type="Observation">
+          <Description>工具执行结果</Description>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 调用L5.execute(action.action, action.action_input)</Step>
+        <Step>2. 捕获任何异常，封装为status="error"的Observation</Step>
+        <Step>3. 若返回confirmation_required，设置status="confirmation_required"</Step>
+        <Step>4. 返回Observation</Step>
+      </Implementation>
+    </Method>
+
+    <Method name="format_tools_for_llm">
+      <Signature>
+        <Output type="List[Dict]">
+          <Description>OpenAI格式的工具定义列表</Description>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 调用L5.get_available_tools()</Step>
+        <Step>2. 返回工具定义列表（OpenAI functions格式）</Step>
+      </Implementation>
+    </Method>
+  </Methods>
+
+  <ErrorHandling>
+    <Exception name="ToolExecutionError">
+      <Description>工具执行失败</Description>
+      <ObservationFormat>
+        <status>error</status>
+        <result>错误信息</result>
+        <metadata>
+          <error_type>ToolExecutionError</error_type>
+          <source>ToolCaller</source>
+        </metadata>
+      </ObservationFormat>
+    </Exception>
+    <Exception name="ToolNotFoundError">
+      <Description>工具不存在</Description>
+      <ObservationFormat>
+        <status>error</status>
+        <result>工具未找到</result>
+        <metadata>
+          <error_type>ToolNotFoundError</error_type>
+          <source>ToolCaller</source>
+        </metadata>
+      </ObservationFormat>
+    </Exception>
+    <Exception name="PermissionError">
+      <Description>权限不足</Description>
+      <ObservationFormat>
+        <status>error</status>
+        <result>权限不足</result>
+        <metadata>
+          <error_type>PermissionError</error_type>
+          <source>ToolCaller</source>
+        </metadata>
+      </ObservationFormat>
+    </Exception>
+  </ErrorHandling>
+
+  <Integration>
+    <Upstream>
+      <From>L3.ReActEngine / L3.Orchestration</From>
+      <Data>AgentAction</Data>
+    </Upstream>
+    <Downstream>
+      <To>L5.ToolsCapabilities.execute()</To>
+      <Data>action_name, params</Data>
+      <Note>通过ToolsInterface依赖注入，禁止直接实例化L5</Note>
+    </Downstream>
+    <ReturnPath>
+      <From>L5</From>
+      <To>L3.Orchestration._run_react_loop()</To>
+      <Data>Observation</Data>
+    </ReturnPath>
+  </Integration>
+
+  <Testing>
+    <TestCases>
+      <Case id="TC-TC-001">call_tool() 成功返回Observation（status=success）</Case>
+      <Case id="TC-TC-002">call_tool() 工具不存在返回错误Observation</Case>
+      <Case id="TC-TC-003">call_tool() 权限不足返回错误Observation</Case>
+      <Case id="TC-TC-004">format_tools_for_llm() 返回正确格式</Case>
+    </TestCases>
+  </Testing>
+
+  <ImplementationNotes>
+    <Note>现有代码位于 src/l3/l3_orchestration.py ToolCaller 类</Note>
+    <Note>当前状态：call_tool() 为TODO占位，返回固定Observation</Note>
+    <Note>当前状态：format_tools_for_llm() 已实现，调用self.tools.get_available_tools()</Note>
+    <Note>需补全：call_tool() 实际调用L5.execute()，异常处理，Observation封装</Note>
+    <Note>当前状态：ToolCaller通过ToolsInterface与L5解耦</Note>
+  </ImplementationNotes>
+
+</Component>

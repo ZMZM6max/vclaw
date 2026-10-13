@@ -1,0 +1,72 @@
+{
+  "request_id": "tc-01",
+  "description": "层间数据传输记录",
+  "transfers": [
+    {
+      "step": 1,
+      "from": "L1",
+      "to": "L2",
+      "type": "StandardEvent",
+      "timestamp": "2026-04-21T18:14:24.837266",
+      "data": {
+        "standard_event": {
+          "channel": "telegram",
+          "user_id": "test_user_001",
+          "content": "帮我在桌面上建个文档，写上今天下午3点开周会",
+          "timestamp": 1704067200.0,
+          "metadata": {
+            "source": "telegram",
+            "message_id": 1,
+            "session_id": "30aee144-5dc2-4d44-8592-399ef4809a4b"
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "from": "L2",
+      "to": "L3",
+      "type": "L3CompleteInput",
+      "timestamp": "2026-04-21T18:14:34.467434",
+      "data": {
+        "session_context": {
+          "session_id": "c2a3d5b1-8b4a-4a2d-9a5d-3f7f1f2e9c11",
+          "user_id": "test_user_001",
+          "current_query": "帮我在桌面上建个文档，写上今天下午3点开周会",
+          "history": [],
+          "user_permissions": [
+            "chat",
+            "file_read",
+            "calculator",
+            "execute_code",
+            "file_write"
+          ],
+          "created_at": 1704067200,
+          "metadata": {
+            "channel": "telegram",
+            "rate_limit_remaining": 59
+          }
+        },
+        "available_tools_count": 4,
+        "relevant_memories_count": 0
+      }
+    },
+    {
+      "step": 3,
+      "from": "L3",
+      "to": "L5",
+      "type": "AgentAction",
+      "timestamp": "2026-04-21T18:14:39.994219",
+      "data": {
+        "agent_action": {
+          "action": "file_write",
+          "action_input": {
+            "path": "documents/desktop/周会文档.txt",
+            "content": "今天下午3点开周会"
+          },
+          "thought": "用户要在桌面创建一个文档并写入指定内容，最合适的工具是file_write；按路径规则将“桌面”转换为documents/desktop/。"
+        }
+      }
+    }
+  ]
+}

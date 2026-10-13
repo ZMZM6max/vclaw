@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Component: ErrorTranslator
+  Layer: L3 (Orchestration)
+  创建时间: 2026-04-27
+  用途: 定义L3错误转译器的详细规范
+  状态: 现有代码为简单映射表，需补全LLM转译逻辑
+-->
+<Component name="ErrorTranslator" layer="L3" version="1.0">
+
+  <Description>
+    错误转译器，将L5返回的业务级技术错误转译为用户友好的中文提示，并通过L2回流至L1规范化返回。
+    仅处理业务语义错误（工具执行失败、文件不存在、权限不足、参数非法等）。
+    禁止处理传输/协议级错误（连接超时、JSON解析失败）——此类错误由 L1.ErrorHandler 处理。
+  </Description>
+
+  <Scope>
+    <Item>仅处理业务语义错误：工具执行失败、文件不存在、权限不足、参数非法等</Item>
+    <Item>禁止介入传输/协议级错误（连接超时、JSON解析失败）——此类错误由 L1.ErrorHandler 处理</Item>
+    <Item>仅当Observation.status为error时触发</Item>
+  </Scope>
+
+  <Responsibilities>
+    <Item priority="critical">将技术异常转译为自然语言中文提示</Item>
+    <Item priority="critical">保留原始错误信息供调试，但向用户返回通俗解释</Item>
+    <Item priority="high">区分可恢复错误（重试）与不可恢复错误（终止）</Item>
+    <Item priority="high">通过L2回流至L1.ErrorHandler，由L1统一格式返回给用户</Item>
+    <Item priority="medium">优先使用固定映射表，未知错误使用LLM转译</Item>
+  </Responsibilities>
+
+  <InputContract>
+    <Source component="ToolCaller">ToolCaller执行工具失败时产生的异常（ToolExecutionError、TimeoutError等）</Source>
+    <Source component="LLMManager">LLM调用失败时产生的异常（LLMError、RateLimitError等）</Source>
+    <Source component="MemoryAccessor">L4检索失败时产生的异常（VectorStoreError、EmbeddingError等）</Source>
+    <TriggerCondition>Observation.status == "error" 或 ReAct循环中捕获到任何业务级异常</TriggerCondition>
+    <Note>ErrorTranslator必须订阅ToolCaller和LLMManager的异常事件，禁止在异常未经过ErrorTranslator转译前直接返回给用户</Note>
+  </InputContract>
+
+  <ErrorReturnPath>
+    <Step>L3.ErrorTranslator 转译错误</Step>
+    <Step>L2 接收转译后的错误文本，注入到响应体</Step>
+    <Step>L1.ErrorHandler 规范化输出格式（HTTP状态码、Telegram消息格式等）</Step>
+    <Step>最终用户收到友好错误提示</Step>
+    <Note>ErrorTranslator与ErrorHandler的分工：ErrorTranslator负责业务语义转译（中文），ErrorHandler负责协议级格式化（状态码、消息结构）</Note>
+  </ErrorReturnPath>
+
+  <TranslationRules>
+    <Rule priority="critical">遇到工具异常必须原样转述错误类别，不得用LLM常识回答替代（如遇到网络错误不得回复"红烧肉做法"）</Rule>
+    <Rule>固定映射优先：若error_text匹配TRANSLATIONS中的关键词，直接返回映射文本</Rule>
+    <Rule>LLM转译为fallback：若未匹配固定映射，调用LLM生成友好提示</Rule>
+    <Rule>转译结果必须是中文，口语化，1-2句话</Rule>
+    <Rule>禁止在转译结果中暴露技术细节（如堆栈跟踪、HTTP状态码）</Rule>
+  </TranslationRules>
+
+  <FixedTranslations>
+    <Translation>
+      <Match>502 Bad Gateway</Match>
+      <Text>外部服务暂时不可用，请稍后重试</Text>
+    </Translation>
+    <Translation>
+      <Match>ToolNotFoundError</Match>
+      <Text>系统暂时不支持该工具，请尝试其他方式</Text>
+    </Translation>
+    <Translation>
+      <Match>FileNotFoundError</Match>
+      <Text>找不到该文件，请确认路径是否正确或文件是否已移动</Text>
+    </Translation>
+    <Translation>
+      <Match>FileExistsError</Match>
+      <Text>该位置已有同名文件，请选择覆盖、重命名或保存到其他位置</Text>
+    </Translation>
+    <Translation>
+      <Match>PermissionError</Match>
+      <Text>抱歉，您没有权限执行此操作</Text>
+    </Translation>
+    <Translation>
+      <Match>TimeoutError</Match>
+      <Text>操作超时了，请稍后重试或简化请求</Text>
+    </Translation>
+  </FixedTranslations>
+
+  <ErrorSchema>
+    <Requirement>ToolCaller抛出的error对象必须包含error_type和source字段，ErrorTranslator根据这两个字段进行精准转译，禁止回退到通用知识回答</Requirement>
+    <Fields>
+      <Field name="error_type" required="true">
+        <Values>ToolExecutionError, NetworkError, PermissionError, TimeoutError, ValidationError, FileNotFoundError, FileExistsError</Values>
+      </Field>
+      <Field name="source" required="true">
+        <Values>ToolCaller, LLMManager, MemoryAccessor, L5.ToolExecutor, L6.SandboxManager</Values>
+      </Field>
+      <Field name="message" required="true">
+        <Description>原始错误信息（供调试）</Description>
+      </Field>
+    </Fields>
+  </ErrorSchema>
+
+  <LLMTranslationPrompt>
+    <![CDATA[
+The tool execution failed with the following error:
+
+Error details: {error_details}
+Error metadata: {metadata}
+
+Please provide a user-friendly explanation in Chinese of what went wrong.
+Keep it concise (1-2 sentences), polite and helpful.
+If it's a file not found error, suggest checking the path.
+If it's a permission error, explain access is denied.
+If it's a timeout, suggest simplifying the request.
+
+Important: Only explain the error, do not provide unrelated information.
+    ]]>
+  </LLMTranslationPrompt>
+
+  <Methods>
+    <Method name="translate">
+      <Signature>
+        <Input>
+          <Parameter name="observation" type="Observation" required="true">
+            <Description>包含错误的Observation对象</Description>
+          </Parameter>
+        </Input>
+        <Output type="str">
+          <Description>用户友好的中文错误提示</Description>
+        </Output>
+      </Signature>
+      <Implementation>
+        <Step>1. 若observation.status != "error"，直接返回observation.result</Step>
+        <Step>2. 遍历FixedTranslations，若observation.result包含match关键词，返回对应文本</Step>
+        <Step>3. 若未匹配，调用LLMManager.complete()使用LLMTranslationPrompt生成提示</Step>
+        <Step>4. 若LLM也失败，返回通用错误提示"操作失败，请稍后重试"</Step>
+      </Implementation>
+    </Method>
+  </Methods>
+
+  <Integration>
+    <Upstream>
+      <From>L3.Orchestration._run_react_loop()</From>
+      <Data>Observation（status=error）</Data>
+      <Trigger>ReAct循环中收到错误Observation</Trigger>
+    </Upstream>
+    <Downstream>
+      <To>L2.ControlGateway</To>
+      <Data>转译后的错误文本（str）</Data>
+      <Note>错误文本经L2回流至L1.ErrorHandler进行协议级格式化</Note>
+    </Downstream>
+  </Integration>
+
+  <Testing>
+    <Requirement>L5错误转译测试必须使用真实LLM验证转译质量</Requirement>
+    <TestCases>
+      <Case id="TC-ET-001">translate() 匹配FileNotFoundError返回固定文本</Case>
+      <Case id="TC-ET-002">translate() 匹配FileExistsError返回固定文本</Case>
+      <Case id="TC-ET-003">translate() 未知错误调用LLM生成友好提示</Case>
+      <Case id="TC-ET-004">translate() status=success时原样返回</Case>
+      <Case id="TC-ET-005">translate() 结果必须是中文且口语化</Case>
+    </TestCases>
+  </Testing>
+
+  <ImplementationNotes>
+    <Note>现有代码位于 src/l3/l3_orchestration.py ErrorTranslator 类</Note>
+    <Note>当前状态：ErrorTranslator类为静态映射表，仅支持6个固定翻译</Note>
+    <Note>当前状态：Orchestration._translate_error() 方法使用LLM转译，但不在ErrorTranslator类中</Note>
+    <Note>需补全：将Orchestration._translate_error() 的LLM转译逻辑迁移到ErrorTranslator类</Note>
+    <Note>需补全：ErrorTranslator需接收LLMManager实例用于LLM转译fallback</Note>
+  </ImplementationNotes>
+
+</Component>
